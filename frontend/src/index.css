@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
+  body {
+    background-color: #060911;
+    color: #f1f5f9;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Custom Scrollbar for Mission Control Feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b1120;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f2f4a;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334e7a;
+}
+
+/* Leaflet Customizations for Dark Command Center */
+.leaflet-container {
+  background-color: #060911 !important;
+  font-family: 'Inter', sans-serif !important;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Dark Command Center Map Filter for OpenStreetMap (No Watermarks, No API Key) */
+.leaflet-tile {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7) !important;
+}
+
+.leaflet-bar a {
+  background-color: #0f172a !important;
+  color: #94a3b8 !important;
+  border-bottom: 1px solid #1e293b !important;
+  border-color: #1e293b !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1e293b !important;
+  color: #38bdf8 !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+  border: 1px solid #1e293b !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.leaflet-popup-tip {
+  background: #0f172a !important;
+  border-top: 1px solid #1e293b !important;
+}
+
+/* Radar & Meteorological Background Grid */
+.bg-radar-grid {
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(31, 47, 74, 0.3) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(31, 47, 74, 0.3) 1px, transparent 1px);
+}
+
+.bg-radial-vignette {
+  background: radial-gradient(circle at 50% 30%, rgba(6, 182, 212, 0.08) 0%, rgba(6, 9, 17, 0.95) 75%, #060911 100%);
+}
+
+/* Pulse radar ring */
+.radar-ring {
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  animation: radarPing 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes radarPing {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  75%, 100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}

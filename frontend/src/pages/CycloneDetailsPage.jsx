@@ -6,14 +6,9 @@ import {
   Gauge,
   MapPin,
   Compass,
-  Clock,
   Download,
-  Share2,
-  Calendar,
-  Layers,
   ArrowLeft,
   Eye,
-  FileSpreadsheet,
   CheckCircle2,
 } from 'lucide-react';
 import {
@@ -56,9 +51,9 @@ export const CycloneDetailsPage = () => {
 
   if (loading || !cyclone) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs font-mono text-slate-400">RETRIEVING STORM DOSSIER...</span>
+      <div className="min-h-[55vh] flex flex-col items-center justify-center space-y-3">
+        <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs font-mono text-slate-400">Loading cyclone storm dossier...</span>
       </div>
     );
   }
@@ -95,71 +90,71 @@ export const CycloneDetailsPage = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* NAVIGATION CRUMBS */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 pb-8">
+      {/* NAVIGATION BREADCRUMB */}
+      <div>
         <Link
           to="/dashboard"
-          className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1.5"
+          className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1.5 font-medium"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Return to Dashboard</span>
+          <span>Back to Cyclone Monitoring Dashboard</span>
         </Link>
       </div>
 
       {/* STORM DOSSIER HEADER */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-meteor-900 to-slate-950 border border-meteor-border space-y-4">
+      <div className="p-5 rounded-lg bg-[#0c1220] border border-slate-800 space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl font-extrabold font-display text-white tracking-wider">
-                CYCLONE {cyclone.name}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-2xl font-bold text-white tracking-tight">
+                Cyclone {cyclone.name}
               </h1>
               <Badge severity={cyclone.riskLevel}>
                 {cyclone.classificationCode} • {cyclone.riskLevel} RISK
               </Badge>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
                 {cyclone.basin}
               </span>
             </div>
             <p className="text-xs text-slate-400 font-mono">
-              Detection Timestamp: {new Date(cyclone.detectedAt).toUTCString()} • Sensor: {cyclone.satelliteSensor}
+              Detection Timestamp: {new Date(cyclone.detectedAt).toUTCString()} • Sensor: {cyclone.satelliteSensor || 'INSAT-3DR'}
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExportCSV}
-              className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono border border-slate-700 transition-colors flex items-center gap-2"
-            >
-              <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Export CSV</span>
-            </button>
-          </div>
+          <button
+            onClick={handleExportCSV}
+            className="self-start md:self-auto px-3 py-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-200 text-xs border border-slate-750 transition-colors flex items-center gap-1.5 font-medium"
+          >
+            <Download className="w-3.5 h-3.5 text-sky-400" />
+            <span>Export Track CSV</span>
+          </button>
         </div>
 
-        <p className="text-xs text-slate-300 leading-relaxed max-w-4xl pt-2 border-t border-meteor-border/60">
-          {cyclone.summary}
-        </p>
+        {cyclone.summary && (
+          <p className="text-xs text-slate-300 leading-relaxed pt-2 border-t border-slate-800/80">
+            {cyclone.summary}
+          </p>
+        )}
       </div>
 
-      {/* TELEMETRY METRIC CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* TELEMETRY METRIC CARDS WITH HUMAN CONTEXT */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard
           label="Classification"
           value={cyclone.classificationCode}
           subtext={cyclone.classification}
+          context="IMD 3-minute sustained wind stage."
           icon={Activity}
-          accent="purple"
         />
 
         <StatCard
-          label="Sustained Winds"
-          value={cyclone.windSpeedKnots}
-          unit="kt"
-          subtext={`${cyclone.windSpeedKmh} km/h • Gusts ${cyclone.gustsKnots || 75} kt`}
+          label="Max Sustained Winds"
+          value={cyclone.windSpeedKmh}
+          unit="km/h"
+          subtext={`${cyclone.windSpeedKnots} knots`}
+          context={`Gusts up to ${cyclone.gustsKnots || Math.round(cyclone.windSpeedKnots * 1.2)} kt.`}
           icon={Wind}
-          accent="rose"
         />
 
         <StatCard
@@ -167,56 +162,50 @@ export const CycloneDetailsPage = () => {
           value={cyclone.pressureHpa}
           unit="hPa"
           subtext="Barometric Eye Depth"
+          context="Lower pressure indicates deeper eye wall."
           icon={Gauge}
-          accent="amber"
         />
 
         <StatCard
-          label="Current Coordinates"
+          label="Coordinates"
           value={`${cyclone.latitude}°N`}
           unit={`${cyclone.longitude}°E`}
-          subtext={`Vector: ${cyclone.movementDirection} @ ${cyclone.movementSpeedKmh} km/h`}
+          subtext={`Moving ${cyclone.movementDirection} @ ${cyclone.movementSpeedKmh || 14} km/h`}
+          context="Eye centroid estimate."
           icon={MapPin}
-          accent="cyan"
         />
 
         <StatCard
           label="Model Confidence"
           value={`${cyclone.detectionConfidence}%`}
-          subtext="Sensor Signal-to-Noise"
+          subtext="High Signal Quality"
+          context="Multi-sensor pattern certainty."
           icon={CheckCircle2}
-          accent="emerald"
         />
       </div>
 
       {/* CHARTS: WIND SPEED HISTORY & PRESSURE HISTORY */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Chart 1: Wind Speed History */}
         <Card
           icon={Wind}
           title="Wind Speed Progression (Knots)"
           subtitle="Observed 3-minute average sustained wind evolution"
         >
-          <div style={{ width: '100%', height: 260 }}>
+          <div style={{ width: '100%', height: 240 }}>
             <ResponsiveContainer>
               <AreaChart data={historicalData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="windDetailGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.5} />
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f2f4a" opacity={0.6} />
-                <XAxis dataKey="time" stroke="#64748b" fontSize={10} fontFamily="JetBrains Mono" />
-                <YAxis stroke="#06b6d4" fontSize={10} fontFamily="JetBrains Mono" domain={[15, 120]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.7} />
+                <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="Inter, sans-serif" />
+                <YAxis stroke="#0284c7" fontSize={11} fontFamily="JetBrains Mono, monospace" domain={[15, 120]} />
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-slate-900 border border-slate-700 p-2.5 rounded text-xs font-mono">
-                          <div className="text-cyan-400 font-bold">{label}</div>
-                          <div className="text-white mt-1">
-                            Winds: <span className="font-bold">{payload[0].value} kt</span> ({Math.round(payload[0].value * 1.852)} km/h)
+                        <div className="bg-slate-900 border border-slate-700 p-2 rounded text-xs">
+                          <div className="text-white font-medium">{label}</div>
+                          <div className="text-sky-400 font-mono mt-0.5">
+                            Winds: {payload[0].value} kt ({Math.round(payload[0].value * 1.852)} km/h)
                           </div>
                         </div>
                       );
@@ -224,7 +213,7 @@ export const CycloneDetailsPage = () => {
                     return null;
                   }}
                 />
-                <Area type="monotone" dataKey="wind" stroke="#06b6d4" strokeWidth={2} fill="url(#windDetailGradient)" />
+                <Area type="monotone" dataKey="wind" stroke="#0284c7" strokeWidth={2} fill="#0284c7" fillOpacity={0.12} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -236,20 +225,20 @@ export const CycloneDetailsPage = () => {
           title="Central Pressure Profile (hPa)"
           subtitle="Barometric eye depressurization trend"
         >
-          <div style={{ width: '100%', height: 260 }}>
+          <div style={{ width: '100%', height: 240 }}>
             <ResponsiveContainer>
               <LineChart data={historicalData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1f2f4a" opacity={0.6} />
-                <XAxis dataKey="time" stroke="#64748b" fontSize={10} fontFamily="JetBrains Mono" />
-                <YAxis stroke="#f59e0b" fontSize={10} fontFamily="JetBrains Mono" domain={[930, 1010]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.7} />
+                <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="Inter, sans-serif" />
+                <YAxis stroke="#d97706" fontSize={11} fontFamily="JetBrains Mono, monospace" domain={[930, 1010]} />
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-slate-900 border border-slate-700 p-2.5 rounded text-xs font-mono">
-                          <div className="text-amber-400 font-bold">{label}</div>
-                          <div className="text-white mt-1">
-                            Pressure: <span className="font-bold">{payload[0].value} hPa</span>
+                        <div className="bg-slate-900 border border-slate-700 p-2 rounded text-xs">
+                          <div className="text-white font-medium">{label}</div>
+                          <div className="text-amber-400 font-mono mt-0.5">
+                            Pressure: {payload[0].value} hPa
                           </div>
                         </div>
                       );
@@ -257,22 +246,22 @@ export const CycloneDetailsPage = () => {
                     return null;
                   }}
                 />
-                <Line type="monotone" dataKey="pressure" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4, fill: '#f59e0b' }} />
+                <Line type="monotone" dataKey="pressure" stroke="#d97706" strokeWidth={2} dot={{ r: 3, fill: '#f59e0b' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
       </div>
 
-      {/* TRACK INFORMATION & RADIAL WIND STRUCTURE */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* TRACK MAP & MORPHOLOGICAL STRUCTURE */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <div className="lg:col-span-8">
           <Card
             icon={Compass}
             title="Observation Track Map"
             subtitle="Historical coordinates and projected landfall cone"
           >
-            <CycloneMap cyclone={cyclone} height="380px" showCone={true} />
+            <CycloneMap cyclone={cyclone} height="360px" showCone={true} />
           </Card>
         </div>
 
@@ -282,27 +271,27 @@ export const CycloneDetailsPage = () => {
             title="Core Morphological Structure"
             subtitle="Eye & Wind Radii Estimates"
           >
-            <div className="space-y-3 text-xs font-mono">
-              <div className="p-3 rounded-lg bg-slate-950 border border-meteor-border space-y-1">
-                <span className="text-slate-400">Eye Diameter:</span>
+            <div className="space-y-2.5 text-xs font-mono">
+              <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-slate-400 block font-sans text-[11px]">Eye Diameter:</span>
                 <div className="text-white font-bold text-sm">
-                  {cyclone.eyeRadiusKm * 2} km ({cyclone.eyeRadiusKm} km Radius)
+                  {cyclone.eyeRadiusKm ? cyclone.eyeRadiusKm * 2 : 40} km ({cyclone.eyeRadiusKm || 20} km Radius)
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950 border border-meteor-border space-y-1">
-                <span className="text-slate-400">Radius of Max Winds (RMW):</span>
-                <div className="text-cyan-400 font-bold text-sm">35 km from Eye Center</div>
+              <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-slate-400 block font-sans text-[11px]">Radius of Max Winds (RMW):</span>
+                <div className="text-sky-400 font-bold text-sm">35 km from Eye Center</div>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950 border border-meteor-border space-y-1">
-                <span className="text-slate-400">Gale Wind Extent (34 kt):</span>
+              <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-slate-400 block font-sans text-[11px]">Gale Wind Extent (34 kt):</span>
                 <div className="text-slate-200">NE: 220 km • SE: 180 km • SW: 140 km • NW: 160 km</div>
               </div>
 
-              <div className="p-3 rounded-lg bg-slate-950 border border-meteor-border space-y-1">
-                <span className="text-slate-400">Storm Surge Hazard:</span>
-                <div className="text-rose-400 font-bold">1.5 - 2.5 meters above tide</div>
+              <div className="p-2.5 rounded bg-slate-900 border border-slate-800 space-y-0.5">
+                <span className="text-slate-400 block font-sans text-[11px]">Storm Surge Hazard:</span>
+                <div className="text-rose-400 font-bold">1.5 - 2.5 meters above astronomical tide</div>
               </div>
             </div>
           </Card>

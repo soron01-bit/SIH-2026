@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
+import cycloneService, { createTrackedCycloneFromAnalysis } from '../services/cycloneService';
+import alertService, { createAlertFromCyclone } from '../services/alertService';
 
 const AIModelContext = createContext();
 
@@ -8,6 +10,10 @@ export const AIModelProvider = ({ children }) => {
   const [isModelConnected, setIsModelConnected] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [modelTelemetry, setModelTelemetry] = useState(null);
+  const [detectedCyclone, setDetectedCyclone] = useState(() => {
+    const stored = cycloneService.getStoredCyclones();
+    return stored.length > 0 ? stored[0] : null;
+  });
 
   // Check backend model status if available
   useEffect(() => {
@@ -22,10 +28,13 @@ export const AIModelProvider = ({ children }) => {
           setModelTelemetry(res.data);
         }
       } catch (err) {
-        // Backend or model not yet connected; remains in standby
+        // Backend or model not yet connected
         if (isMounted) {
-          setIsModelConnected(false);
-          setIsDetecting(false);
+          // Keep connected if user ran client-side inference
+          const stored = cycloneService.getStoredCyclones();
+          if (stored.length > 0) {
+            setIsModelConnected(true);
+          }
         }
       }
     };
@@ -38,6 +47,37 @@ export const AIModelProvider = ({ children }) => {
     };
   }, []);
 
+  // Sync with window events from cycloneService
+  useEffect(() => {
+    const handleCycloneUpdate = (e) => {
+      setDetectedCyclone(e.detail);
+      if (e.detail) {
+        setIsModelConnected(true);
+      }
+    };
+
+    window.addEventListener('cyclonex:cyclone-updated', handleCycloneUpdate);
+    return () => window.removeEventListener('cyclonex:cyclone-updated', handleCycloneUpdate);
+  }, []);
+
+  const registerCycloneAnalysis = (analysisData) => {
+    const trackedStorm = createTrackedCycloneFromAnalysis(analysisData);
+    cycloneService.saveDetectedCyclone(trackedStorm);
+
+    const alert = createAlertFromCyclone(trackedStorm);
+    alertService.saveAlert(alert);
+
+    setDetectedCyclone(trackedStorm);
+    setIsModelConnected(true);
+    return trackedStorm;
+  };
+
+  const clearCycloneAnalysis = () => {
+    cycloneService.clearDetectedCyclone();
+    alertService.clearAlerts();
+    setDetectedCyclone(null);
+  };
+
   return (
     <AIModelContext.Provider
       value={{
@@ -47,6 +87,9 @@ export const AIModelProvider = ({ children }) => {
         setIsDetecting,
         modelTelemetry,
         setModelTelemetry,
+        detectedCyclone,
+        registerCycloneAnalysis,
+        clearCycloneAnalysis,
       }}
     >
       {children}

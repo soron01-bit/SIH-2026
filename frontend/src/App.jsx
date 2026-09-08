@@ -15,12 +15,12 @@ export function App() {
   return (
     <AIModelProvider>
       <BrowserRouter>
-        <div className="min-h-screen bg-meteor-950 text-slate-100 flex flex-col selection:bg-cyan-500/20 selection:text-cyan-300 relative bg-radar-grid">
-          {/* Command Center Sticky Navbar */}
+        <div className="min-h-screen bg-[#080c15] text-slate-100 flex flex-col selection:bg-sky-500/20 selection:text-sky-300">
+          {/* Main Top Navigation */}
           <Navbar />
 
-          {/* Dynamic Route Content */}
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-8">
+          {/* Dynamic Content View */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-8">
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
@@ -32,7 +32,7 @@ export function App() {
             </Routes>
           </main>
 
-          {/* Minimal Status Footer */}
+          {/* Calm Meteorological Footer */}
           <Footer />
         </div>
       </BrowserRouter>

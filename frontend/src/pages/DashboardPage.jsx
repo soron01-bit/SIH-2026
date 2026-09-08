@@ -6,270 +6,324 @@ import {
   Gauge,
   MapPin,
   ShieldAlert,
-  Percent,
-  Compass,
-  Layers,
+  ShieldCheck,
   ChevronRight,
   Radio,
-  CheckCircle2,
-  ShieldCheck,
+  Layers,
+  Clock,
+  Compass,
+  ArrowRight,
+  Navigation,
 } from 'lucide-react';
 import cycloneService from '../services/cycloneService';
 import alertService from '../services/alertService';
 import Card from '../components/common/Card';
 import StatCard from '../components/common/StatCard';
 import Badge from '../components/common/Badge';
-import StatusIndicator from '../components/common/StatusIndicator';
 import CycloneMap from '../components/map/CycloneMap';
 import IntensityChart from '../components/dashboard/IntensityChart';
 import SatellitePreviewCard from '../components/dashboard/SatellitePreviewCard';
 import QuickAlertsList from '../components/dashboard/QuickAlertsList';
 import SystemHealthCard from '../components/dashboard/SystemHealthCard';
+import { useAIModel } from '../context/AIModelContext';
 
 export const DashboardPage = () => {
+  const { detectedCyclone } = useAIModel();
   const [cyclones, setCyclones] = useState([]);
   const [selectedCyclone, setSelectedCyclone] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastCheckTime, setLastCheckTime] = useState('');
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      const cyclonesRes = await cycloneService.getAll();
+      const cycloneList = cyclonesRes.data || [];
+      setCyclones(cycloneList);
+      setSelectedCyclone(cycloneList.length > 0 ? cycloneList[0] : null);
+
+      const alertsRes = await alertService.getAll();
+      setAlerts(alertsRes.data || []);
+    } catch (err) {
+      console.error('Error fetching dashboard telemetry:', err);
+    } finally {
+      const now = new Date();
+      setLastCheckTime(now.toUTCString().replace('GMT', 'UTC'));
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadDashboardData = async () => {
-      setLoading(true);
-      try {
-        const cyclonesRes = await cycloneService.getAll();
-        const cycloneList = cyclonesRes.data || [];
-        setCyclones(cycloneList);
-        setSelectedCyclone(cycloneList.length > 0 ? cycloneList[0] : null);
+    loadDashboardData();
 
-        const alertsRes = await alertService.getAll();
-        setAlerts(alertsRes.data || []);
-      } catch (err) {
-        console.error('Error fetching telemetry:', err);
-      } finally {
-        setLoading(false);
-      }
+    const handleUpdate = () => {
+      loadDashboardData();
     };
 
-    loadDashboardData();
+    window.addEventListener('cyclonex:cyclone-updated', handleUpdate);
+    return () => window.removeEventListener('cyclonex:cyclone-updated', handleUpdate);
   }, []);
+
+  useEffect(() => {
+    if (detectedCyclone) {
+      setSelectedCyclone(detectedCyclone);
+    }
+  }, [detectedCyclone]);
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-4">
-        <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs font-mono text-slate-400">CONNECTING TO MISSION MONITOR...</span>
+      <div className="min-h-[50vh] flex flex-col items-center justify-center space-y-2.5">
+        <div className="w-7 h-7 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-slate-400">Loading latest cyclone monitoring data...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* TOP HEADER */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-meteor-border/80 pb-5">
+    <div className="space-y-5 pb-8">
+      {/* 1. TOP HEADER: CYCLONE MONITORING & STATUS */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3.5">
         <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold font-display tracking-wide text-white">
-              Tropical Cyclone Command Center
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+              Cyclone Monitoring
             </h1>
-            <Badge variant="cyan" size="sm">
-              NORTH INDIAN OCEAN
-            </Badge>
+            {selectedCyclone ? (
+              <Badge severity={selectedCyclone.riskLevel}>
+                ● ACTIVE: {selectedCyclone.name.toUpperCase()}
+              </Badge>
+            ) : (
+              <Badge variant="safe">
+                ● NO ACTIVE CYCLONE
+              </Badge>
+            )}
           </div>
-          <p className="text-xs text-slate-400 mt-1 font-mono">
-            Automated Satellite Ingest & Deep Learning Cyclone Identification Pipeline
+          <p className="text-xs text-slate-400 mt-0.5 font-normal">
+            North Indian Ocean Surveillance • Bay of Bengal & Arabian Sea
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-900 border border-meteor-border px-3.5 py-1.5 rounded-xl text-xs font-mono text-slate-300">
-            <StatusIndicator status="standby" label="MONITORING STANDBY" />
-          </div>
+        <div className="flex items-center gap-2 text-xs text-slate-400">
+          <Clock className="w-3.5 h-3.5 text-slate-500" />
+          <span>Last Ingest: <strong className="text-slate-300 font-mono font-normal">{lastCheckTime ? lastCheckTime.substring(17, 25) + ' UTC' : 'Live'}</strong></span>
         </div>
       </div>
 
-      {/* PRIMARY METRICS BAR */}
+      {/* 2. PRIMARY CYCLONE STATUS BLOCK */}
       {selectedCyclone ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-          <StatCard
-            label="Detected Storm"
-            value={selectedCyclone.name}
-            unit={selectedCyclone.classificationCode}
-            subtext={selectedCyclone.basin}
-            icon={Radio}
-            accent="cyan"
-            badge={<Badge severity={selectedCyclone.riskLevel}>{selectedCyclone.riskLevel}</Badge>}
-          />
-          <StatCard
-            label="Classification"
-            value={selectedCyclone.classificationCode}
-            subtext={selectedCyclone.classification}
-            icon={Activity}
-            accent="purple"
-          />
-          <StatCard
-            label="Max Sustained Wind"
-            value={selectedCyclone.windSpeedKnots}
-            unit="kt"
-            subtext={`${selectedCyclone.windSpeedKmh} km/h`}
-            icon={Wind}
-            accent="rose"
-          />
-          <StatCard
-            label="Central Pressure"
-            value={selectedCyclone.pressureHpa}
-            unit="hPa"
-            subtext="Barometric Depth"
-            icon={Gauge}
-            accent="amber"
-          />
-          <StatCard
-            label="Eye Location"
-            value={`${selectedCyclone.latitude.toFixed(1)}°N`}
-            unit={`${selectedCyclone.longitude.toFixed(1)}°E`}
-            subtext={`Moving ${selectedCyclone.movementDirection}`}
-            icon={MapPin}
-            accent="cyan"
-          />
-          <StatCard
-            label="AI Confidence"
-            value={`${selectedCyclone.detectionConfidence}%`}
-            subtext="Signal Quality"
-            icon={Percent}
-            accent="emerald"
-          />
+        /* ACTIVE CYCLONE CORE METRICS */
+        <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-4 sm:p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                Current Cyclone
+              </span>
+              <div className="flex items-baseline gap-2.5 mt-0.5">
+                <h2 className="text-xl font-bold text-white">{selectedCyclone.name}</h2>
+                <span className="text-xs text-sky-400 font-medium">{selectedCyclone.classification} ({selectedCyclone.classificationCode})</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/cyclones/${selectedCyclone.id}`}
+                className="px-3 py-1.5 rounded bg-slate-850 hover:bg-slate-800 border border-slate-750 text-xs text-slate-200 font-medium transition-colors"
+              >
+                Storm Dossier
+              </Link>
+              <Link
+                to="/tracking"
+                className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-xs text-white font-medium transition-colors flex items-center gap-1.5"
+              >
+                <span>Live Tracking Map</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 rounded bg-slate-900 border border-slate-800">
+              <span className="text-xs text-slate-400 font-medium block">Wind Speed</span>
+              <div className="text-xl font-bold font-mono text-white mt-0.5">
+                {selectedCyclone.windSpeedKmh} <span className="text-xs font-normal text-slate-400">km/h</span>
+              </div>
+              <span className="text-[11px] text-slate-400 block font-mono">({selectedCyclone.windSpeedKnots} knots)</span>
+            </div>
+
+            <div className="p-3 rounded bg-slate-900 border border-slate-800">
+              <span className="text-xs text-slate-400 font-medium block">Central Pressure</span>
+              <div className="text-xl font-bold font-mono text-white mt-0.5">
+                {selectedCyclone.pressureHpa} <span className="text-xs font-normal text-slate-400">hPa</span>
+              </div>
+              <span className="text-[11px] text-slate-400 block">Lower indicates stronger system</span>
+            </div>
+
+            <div className="p-3 rounded bg-slate-900 border border-slate-800">
+              <span className="text-xs text-slate-400 font-medium block">Movement</span>
+              <div className="text-base font-bold text-white mt-0.5">
+                {selectedCyclone.movementDirection}
+              </div>
+              <span className="text-[11px] text-slate-400 block font-mono">at {selectedCyclone.movementSpeedKmh || 14} km/h</span>
+            </div>
+
+            <div className="p-3 rounded bg-slate-900 border border-slate-800">
+              <span className="text-xs text-slate-400 font-medium block">Current Location</span>
+              <div className="text-base font-bold font-mono text-white mt-0.5">
+                {selectedCyclone.latitude}°N, {selectedCyclone.longitude}°E
+              </div>
+              <span className="text-[11px] text-slate-400 block">{selectedCyclone.basin}</span>
+            </div>
+          </div>
         </div>
       ) : (
-        /* CLEAN STATE: NO FAKE DATA, AWAITING AI MODEL */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label="Active Cyclones Detected"
-            value="0"
-            subtext="Basins Currently Clear"
-            icon={ShieldCheck}
-            accent="emerald"
-            badge={<span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ALL CLEAR</span>}
-          />
-          <StatCard
-            label="Monitored Basins"
-            value="2"
-            subtext="Bay of Bengal & Arabian Sea"
-            icon={Radio}
-            accent="cyan"
-          />
-          <StatCard
-            label="Sensor Ingest Link"
-            value="Ready"
-            subtext="INSAT-3D/3DR Protocol"
-            icon={Layers}
-            accent="purple"
-          />
-          <StatCard
-            label="AI Inference Engine"
-            value="Ready"
-            subtext="Ready to connect model next"
-            icon={Activity}
-            accent="amber"
-          />
+        /* NO ACTIVE CYCLONE OPERATIONAL CARD */
+        <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                <h2 className="text-base font-semibold text-emerald-400">
+                  NO ACTIVE CYCLONE
+                </h2>
+              </div>
+              <p className="text-sm text-slate-300 font-normal leading-relaxed">
+                Monitoring systems are operational and continuously scanning the North Indian Ocean. No cyclonic circulation detected.
+              </p>
+              <div className="flex items-center gap-4 text-xs text-slate-400 pt-1 font-mono">
+                <span>Last update: <strong className="text-slate-300 font-normal">{lastCheckTime ? lastCheckTime.substring(17, 25) + ' UTC' : '18:45 UTC'}</strong></span>
+                <span>•</span>
+                <span>AI Model: <strong className="text-emerald-400 font-normal">Ready</strong></span>
+                <span>•</span>
+                <span>Surveillance: <strong className="text-slate-300 font-normal">Continuous</strong></span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to="/analysis"
+                className="px-3.5 py-2 rounded bg-slate-850 hover:bg-slate-800 border border-slate-750 text-xs text-slate-200 font-medium transition-colors"
+              >
+                Analyze Satellite Image
+              </Link>
+              <Link
+                to="/tracking"
+                className="px-3.5 py-2 rounded bg-sky-600 hover:bg-sky-500 text-xs text-white font-medium transition-colors flex items-center gap-1.5"
+              >
+                <span>Live Map</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* TWO-COLUMN DASHBOARD GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* LEFT COLUMN: Map & Intensity (8 cols) */}
-        <div className="lg:col-span-8 space-y-6">
+      {/* 3. PREDICTED TRAJECTORY TIMELINE (SHOWN WHEN SYSTEM HAS TRACK DATA) */}
+      {selectedCyclone?.forecastTrack && selectedCyclone.forecastTrack.length > 0 && (
+        <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-4 space-y-2.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-slate-300">
+              Predicted Trajectory Timeline
+            </span>
+            <span className="text-slate-500 font-mono text-[11px]">Movement & Intensity Forecast</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+            <div className="p-2.5 rounded bg-slate-900 border border-sky-900/60">
+              <span className="text-[10px] text-sky-400 font-semibold block uppercase">CURRENT</span>
+              <div className="font-bold text-white font-mono mt-0.5">{selectedCyclone.windSpeedKmh} km/h</div>
+              <span className="text-[11px] text-slate-400 block">{selectedCyclone.classificationCode}</span>
+            </div>
+            {selectedCyclone.forecastTrack.slice(0, 4).map((fc) => (
+              <div key={fc.id} className="p-2.5 rounded bg-slate-900 border border-slate-800">
+                <span className="text-[10px] text-amber-400 font-semibold block">{fc.forecastHour}</span>
+                <div className="font-bold text-white font-mono mt-0.5">{Math.round(fc.windSpeedKnots * 1.852)} km/h</div>
+                <span className="text-[11px] text-slate-400 block">{fc.classification.split(' ')[0]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. MAIN WORKSPACE: LIVE MAP + INTENSITY GRAPH & SENSORS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Left: Live Location Map & Intensity Graph (8 cols) */}
+        <div className="lg:col-span-8 space-y-5">
           <Card
             icon={Compass}
-            title="Geospatial Satellite Monitoring Map"
-            subtitle="Real-time ocean basin tracking & cone of uncertainty"
+            title="Live Location Map"
+            subtitle="Observed track, projected path, and uncertainty cone"
             action={
               <Link
                 to="/tracking"
-                className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                className="text-xs text-sky-400 hover:text-sky-300 font-medium flex items-center gap-1"
               >
-                <span>Expanded Map</span>
-                <ChevronRight className="w-3 h-3" />
+                <span>Full Map</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             }
           >
-            <CycloneMap cyclone={selectedCyclone} height="440px" showCone={true} />
-            <div className="mt-3 pt-3 border-t border-meteor-border/60 flex items-center justify-between text-xs text-slate-400 font-mono">
+            <CycloneMap cyclone={selectedCyclone} height="430px" showCone={true} />
+            <div className="mt-2.5 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
               <span>
                 {selectedCyclone
                   ? `Active System: ${selectedCyclone.name} (${selectedCyclone.classificationCode})`
-                  : 'Status: No active tropical cyclones detected in monitored ocean sectors.'}
+                  : 'Sector Status: Zero cyclonic circulations detected.'}
               </span>
-              <span className="text-slate-500">INSAT / NOAA Tile Grid</span>
+              <span className="text-slate-500 font-mono text-[11px]">Basin: North Indian Ocean</span>
             </div>
           </Card>
 
-          {/* Intensity Evolution */}
+          {/* Intensity Evolution Graph */}
           <Card
             icon={Activity}
-            title="Intensity Evolution & Temporal Forecast"
-            subtitle="Observed vs Model-Projected Winds and Pressure Drop"
+            title="Intensity Evolution"
+            subtitle="Sustained surface winds vs central pressure profile over time"
           >
             {selectedCyclone ? (
-              <IntensityChart cyclone={selectedCyclone} height={260} />
+              <IntensityChart cyclone={selectedCyclone} height={230} />
             ) : (
-              <div className="py-12 text-center text-xs font-mono text-slate-500 space-y-1">
-                <Activity className="w-6 h-6 mx-auto text-slate-600 mb-2" />
-                <div className="text-slate-400 font-semibold">No Active Storm Intensity to Graph</div>
-                <div>Intensity curves will plot automatically when a cyclone is detected by the AI model.</div>
+              <div className="py-8 text-center text-xs text-slate-400 space-y-1">
+                <Activity className="w-5 h-5 mx-auto text-slate-500" />
+                <div className="text-slate-300 font-medium">Trajectory & Intensity Graph Standby</div>
+                <div className="text-[11px] text-slate-500">
+                  Data curves generate automatically when a storm system is active.
+                </div>
               </div>
             )}
           </Card>
         </div>
 
-        {/* RIGHT COLUMN: Satellite Stream & Alerts (4 cols) */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Satellite Viewport Preview */}
+        {/* Right: Satellite Feed, Coastal Advisories, Pipeline (4 cols) */}
+        <div className="lg:col-span-4 space-y-5">
           <Card
             icon={Layers}
-            title="Satellite Feed Viewport"
+            title="Satellite Feed Preview"
             subtitle="INSAT-3DR Multispectral Stream"
           >
-            <div className="space-y-3">
-              <div className="relative aspect-[4/3] rounded-xl overflow-hidden border border-meteor-border bg-slate-950 flex items-center justify-center p-4">
-                <div className="text-center space-y-2 text-xs font-mono text-slate-400">
-                  <Layers className="w-8 h-8 mx-auto text-cyan-400/80" />
-                  <div className="text-slate-200 font-semibold">Satellite Stream Standby</div>
-                  <p className="text-[11px] text-slate-500 max-w-xs leading-relaxed">
-                    Upload new satellite imagery in the AI Analysis studio to run pattern identification.
-                  </p>
-                  <Link
-                    to="/analysis"
-                    className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-semibold pt-1"
-                  >
-                    <span>Open AI Analysis Studio</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </Link>
-                </div>
-              </div>
-            </div>
+            <SatellitePreviewCard cyclone={selectedCyclone} />
           </Card>
 
-          {/* Coastal Alerts */}
           <Card
             icon={ShieldAlert}
             title="Coastal Sector Advisories"
-            subtitle="Disaster Management Early Warning Feed"
+            subtitle="Disaster Management Bulletins"
           >
             {alerts.length > 0 ? (
               <QuickAlertsList alerts={alerts} />
             ) : (
-              <div className="py-8 text-center text-xs font-mono text-slate-500 space-y-1.5">
-                <ShieldCheck className="w-7 h-7 text-emerald-500/80 mx-auto" />
-                <div className="text-slate-300 font-semibold">No Active Coastal Warnings</div>
-                <div className="text-[11px] text-slate-500">All coastal districts are currently in normal condition.</div>
+              <div className="py-6 text-center text-xs text-slate-400 space-y-1">
+                <ShieldCheck className="w-6 h-6 text-emerald-400 mx-auto" />
+                <div className="text-slate-300 font-medium">All Coastal Sectors Clear</div>
+                <div className="text-[11px] text-slate-500">No active warnings or advisories in effect.</div>
               </div>
             )}
           </Card>
 
-          {/* Sensor & Pipeline Health */}
           <Card
             icon={Radio}
-            title="Sensor & Model Telemetry"
-            subtitle="System Readiness"
+            title="System Telemetry"
+            subtitle="Sensor Ingest & Pipeline Health"
           >
             <SystemHealthCard />
           </Card>

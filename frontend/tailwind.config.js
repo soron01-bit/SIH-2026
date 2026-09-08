@@ -8,44 +8,52 @@ export default {
   theme: {
     extend: {
       colors: {
+        slate: {
+          850: '#131b2e',
+          925: '#0b101c',
+          950: '#070b14',
+        },
         meteor: {
-          950: '#060911',
-          900: '#0b1120',
-          850: '#0f172a',
+          950: '#070b14',
+          900: '#0c1220',
+          850: '#11192c',
           800: '#162238',
-          750: '#1c2b46',
-          700: '#233555',
-          600: '#334e7a',
-          border: '#1f2f4a',
-          'border-light': '#2d4368',
+          750: '#1e2d4a',
+          700: '#25385c',
+          600: '#344d7a',
+          border: '#1b253b',
+          'border-light': '#263554',
+        },
+        brand: {
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          400: '#38bdf8',
+          500: '#0ea5e9',
+          600: '#0284c7',
+          700: '#0369a1',
         },
         cyclone: {
-          cyan: '#06b6d4',
-          teal: '#14b8a6',
+          cyan: '#0284c7',
+          teal: '#0d9488',
           emerald: '#10b981',
           amber: '#f59e0b',
           orange: '#f97316',
           rose: '#f43f5e',
-          magenta: '#d946ef',
-          purple: '#8b5cf6',
+          magenta: '#c026d3',
+          purple: '#7c3aed',
+        },
+        risk: {
+          safe: '#10b981',
+          watch: '#eab308',
+          warning: '#f97316',
+          danger: '#ef4444',
         }
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'monospace'],
-        display: ['Outfit', 'Inter', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        display: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
-      animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'radar-ping': 'radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite',
-        'spin-slow': 'spin 12s linear infinite',
-      },
-      keyframes: {
-        radarPing: {
-          '0%': { transform: 'scale(0.8)', opacity: '0.9' },
-          '70%, 100%': { transform: 'scale(2.4)', opacity: '0' },
-        }
-      }
     },
   },
   plugins: [],

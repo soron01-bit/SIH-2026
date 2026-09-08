@@ -16,28 +16,23 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const dataPoint = payload[0].payload;
     return (
-      <div className="bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-xl text-xs font-mono">
-        <div className="text-cyan-400 font-bold mb-1 border-b border-slate-800 pb-1">
-          {label} ({dataPoint.stage || 'Track Observation'})
+      <div className="bg-slate-900 border border-slate-700 rounded p-2.5 shadow-md text-xs font-sans">
+        <div className="text-white font-semibold mb-1 border-b border-slate-800 pb-1 flex items-center justify-between gap-3">
+          <span>{label}</span>
+          <span className="text-slate-400 font-normal text-[11px]">{dataPoint.stage}</span>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 font-mono">
           <div className="flex items-center justify-between gap-4 text-slate-300">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-cyan-400" />
-              Sustained Wind:
-            </span>
-            <span className="text-white font-bold">{dataPoint.windSpeed} kt</span>
+            <span className="text-sky-400">Wind Speed:</span>
+            <span className="text-white font-bold">{dataPoint.windSpeed} kt ({Math.round(dataPoint.windSpeed * 1.852)} km/h)</span>
           </div>
           <div className="flex items-center justify-between gap-4 text-slate-300">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              Central Pressure:
-            </span>
+            <span className="text-amber-400">Pressure:</span>
             <span className="text-white font-bold">{dataPoint.pressure} hPa</span>
           </div>
           {dataPoint.classification && (
-            <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-800/80">
-              {dataPoint.classification}
+            <div className="text-[11px] text-slate-400 pt-1 font-sans">
+              Stage: <strong className="text-slate-200">{dataPoint.classification}</strong>
             </div>
           )}
         </div>
@@ -47,11 +42,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export const IntensityChart = ({ cyclone, height = 280 }) => {
+export const IntensityChart = ({ cyclone, height = 260 }) => {
   if (!cyclone) return null;
 
   // Transform historical and forecast track points into sequential chart data
-  const historical = (cyclone.historicalTrack || []).map((pt, idx) => ({
+  const historical = (cyclone.historicalTrack || []).map((pt) => ({
     time: new Date(pt.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit' }),
     windSpeed: pt.windSpeedKnots,
     pressure: pt.pressureHpa,
@@ -60,7 +55,7 @@ export const IntensityChart = ({ cyclone, height = 280 }) => {
   }));
 
   const current = [{
-    time: 'Now (Eye)',
+    time: 'Current Eye',
     windSpeed: cyclone.windSpeedKnots,
     pressure: cyclone.pressureHpa,
     stage: 'Current Detection',
@@ -79,60 +74,46 @@ export const IntensityChart = ({ cyclone, height = 280 }) => {
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-3 text-xs">
-        <div className="flex items-center gap-2 text-slate-300 font-mono">
-          <Activity className="w-4 h-4 text-cyan-400" />
-          <span>Intensity Evolution (Wind Speed vs Central Pressure)</span>
-        </div>
-      </div>
-
       <div style={{ width: '100%', height }}>
         <ResponsiveContainer>
           <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="windGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
-              </linearGradient>
-            </defs>
-
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2f4a" opacity={0.6} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.7} />
 
             <XAxis
               dataKey="time"
               stroke="#64748b"
-              fontSize={10}
+              fontSize={11}
               tickLine={false}
-              fontFamily="JetBrains Mono"
+              fontFamily="Inter, sans-serif"
             />
 
             {/* Left Axis: Wind Speed (kt) */}
             <YAxis
               yAxisId="left"
               domain={[10, 130]}
-              stroke="#06b6d4"
-              fontSize={10}
+              stroke="#0284c7"
+              fontSize={11}
               tickLine={false}
-              fontFamily="JetBrains Mono"
-              label={{ value: 'Wind (kt)', angle: -90, position: 'insideLeft', fill: '#06b6d4', fontSize: 10 }}
+              fontFamily="JetBrains Mono, monospace"
+              label={{ value: 'Wind (kt)', angle: -90, position: 'insideLeft', fill: '#38bdf8', fontSize: 10 }}
             />
 
-            {/* Right Axis: Central Pressure (hPa) inverted scale */}
+            {/* Right Axis: Central Pressure (hPa) */}
             <YAxis
               yAxisId="right"
               orientation="right"
               domain={[920, 1015]}
-              stroke="#f59e0b"
-              fontSize={10}
+              stroke="#d97706"
+              fontSize={11}
               tickLine={false}
-              fontFamily="JetBrains Mono"
-              label={{ value: 'Pressure (hPa)', angle: 90, position: 'insideRight', fill: '#f59e0b', fontSize: 10 }}
+              fontFamily="JetBrains Mono, monospace"
+              label={{ value: 'Pressure (hPa)', angle: 90, position: 'insideRight', fill: '#fbbf24', fontSize: 10 }}
             />
 
             <Tooltip content={<CustomTooltip />} />
             
             <Legend
-              wrapperStyle={{ fontSize: '11px', fontFamily: 'JetBrains Mono', paddingTop: '10px' }}
+              wrapperStyle={{ fontSize: '11px', fontFamily: 'Inter, sans-serif', paddingTop: '8px' }}
             />
 
             {/* Wind Speed Area */}
@@ -141,10 +122,10 @@ export const IntensityChart = ({ cyclone, height = 280 }) => {
               type="monotone"
               dataKey="windSpeed"
               name="Max Sustained Wind (kt)"
-              stroke="#06b6d4"
+              stroke="#0284c7"
               strokeWidth={2}
-              fillOpacity={1}
-              fill="url(#windGradient)"
+              fill="#0284c7"
+              fillOpacity={0.12}
             />
 
             {/* Barometric Pressure Line */}
@@ -153,7 +134,7 @@ export const IntensityChart = ({ cyclone, height = 280 }) => {
               type="monotone"
               dataKey="pressure"
               name="Central Pressure (hPa)"
-              stroke="#f59e0b"
+              stroke="#d97706"
               strokeWidth={2}
               dot={{ r: 3, fill: '#f59e0b' }}
             />

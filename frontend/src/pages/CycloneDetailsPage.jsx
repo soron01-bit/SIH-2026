@@ -27,6 +27,7 @@ import Card from '../components/common/Card';
 import StatCard from '../components/common/StatCard';
 import Badge from '../components/common/Badge';
 import CycloneMap from '../components/map/CycloneMap';
+import CycloneDossierReport from '../components/dashboard/CycloneDossierReport';
 
 export const CycloneDetailsPage = () => {
   const { id } = useParams();
@@ -297,6 +298,9 @@ export const CycloneDetailsPage = () => {
           </Card>
         </div>
       </div>
+
+      {/* COMPREHENSIVE METEOROLOGICAL DOSSIER REPORT */}
+      <CycloneDossierReport cyclone={cyclone} />
     </div>
   );
 };

@@ -10,14 +10,21 @@ import {
   X,
   Clock,
   Wind,
+  Sun,
+  Radio,
+  RotateCcw,
 } from 'lucide-react';
 import { useAIModel } from '../../context/AIModelContext';
+import { useUserLocation } from '../../context/UserLocationContext';
 
 export const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [utcTime, setUtcTime] = useState('');
+  const [viewMode, setViewMode] = useState('live'); // 'light' | 'live' | 'replay'
 
-  const { isModelConnected, isDetecting } = useAIModel();
+  const { isModelConnected, isDetecting, detectedCyclone } = useAIModel();
+  const { location, requestLocation, getProximityToStorm } = useUserLocation();
+  const proximity = detectedCyclone ? getProximityToStorm(detectedCyclone) : null;
   const showDetecting = isModelConnected || isDetecting;
 
   useEffect(() => {
@@ -25,7 +32,6 @@ export const Navbar = () => {
       const now = new Date();
       setUtcTime(now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC');
     };
-
     updateClocks();
     const interval = setInterval(updateClocks, 1000);
     return () => clearInterval(interval);
@@ -34,34 +40,36 @@ export const Navbar = () => {
   const navLinks = [
     { to: '/', label: 'Overview', icon: Compass },
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/analysis', label: 'AI Analysis', icon: Layers },
     { to: '/tracking', label: 'Tracking', icon: MapPin },
     { to: '/alerts', label: 'Alerts', icon: Bell },
   ];
 
+  const activeCycloneName = detectedCyclone?.name ?? null;
+
   return (
     <header className="sticky top-0 z-50 bg-[#0c1220]/95 backdrop-blur-md border-b border-slate-800/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-15 py-2.5">
+        <div className="flex items-center justify-between h-15 py-2.5 gap-3">
+
           {/* Brand Logo */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <Link to="/dashboard" className="flex items-center gap-2.5 group">
               <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400 group-hover:border-sky-400/50 transition-colors">
                 <Wind className="w-4 h-4 text-sky-400" />
               </div>
               <div className="flex flex-col">
                 <span className="font-semibold text-base tracking-wider text-white">
-                  CYCLONE<span className="text-sky-400">X</span>
+                  CYCLONE<span className="text-sky-400">AI</span>
                 </span>
                 <span className="text-[10px] text-slate-400 font-normal -mt-0.5">
-                  Cyclone Monitoring & Prediction
+                  North Indian Ocean • SIH-2K26
                 </span>
               </div>
             </Link>
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center space-x-1">
+          <nav className="hidden md:flex items-center space-x-1 shrink-0">
             {navLinks.map((item) => {
               const Icon = item.icon;
               return (
@@ -84,8 +92,94 @@ export const Navbar = () => {
             })}
           </nav>
 
-          {/* System Status & Clock */}
-          <div className="hidden sm:flex items-center gap-3">
+          {/* Center: Active Cyclone Pill */}
+          {activeCycloneName && (
+            <div className="hidden sm:flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-700 text-xs">
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                <span className="text-white font-semibold">Cyclone {activeCycloneName}</span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-950/60 border border-rose-700/60 text-rose-400">
+                  ACTIVE
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* User Location & Proximity Pill */}
+          <div className="hidden lg:flex items-center gap-2 shrink-0">
+            {location ? (
+              <button
+                onClick={requestLocation}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/90 border border-slate-700/80 hover:border-sky-500/60 text-xs transition-colors group"
+                title={`User Location: ${location.label}. Click to recalibrate GPS.`}
+              >
+                <MapPin className="w-3 h-3 text-sky-400 group-hover:scale-110 transition-transform" />
+                <span className="text-slate-200 font-medium">{location.city}</span>
+                {proximity && (
+                  <>
+                    <span className="text-slate-500">•</span>
+                    <span className="font-mono text-slate-300">{proximity.distanceKm} km</span>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full animate-pulse"
+                      style={{ backgroundColor: proximity.color || '#10b981' }}
+                      title={`Risk Level: ${proximity.riskLevel}`}
+                    />
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={requestLocation}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-950/40 border border-amber-600/60 hover:bg-amber-900/50 text-amber-300 text-xs font-semibold transition-colors"
+              >
+                <MapPin className="w-3 h-3 text-amber-400" />
+                <span>Allow Location</span>
+              </button>
+            )}
+          </div>
+
+          {/* Right: View Mode + Clock + Status */}
+          <div className="hidden sm:flex items-center gap-2.5 shrink-0">
+
+            {/* View Mode Toggles */}
+            <div className="flex items-center rounded-lg overflow-hidden border border-slate-800 bg-slate-900/50">
+              <button
+                onClick={() => setViewMode('light')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                  viewMode === 'light' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Light mode"
+              >
+                <Sun className="w-3 h-3" />
+                <span>Light</span>
+              </button>
+              <button
+                onClick={() => setViewMode('live')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold transition-colors ${
+                  viewMode === 'live'
+                    ? 'bg-sky-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Live monitoring mode"
+              >
+                <Radio className="w-3 h-3" />
+                <span>Live</span>
+              </button>
+              <button
+                onClick={() => setViewMode('replay')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                  viewMode === 'replay' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Historical replay mode"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Replay</span>
+              </button>
+            </div>
+
+            <div className="h-4 w-px bg-slate-800" />
+
+            {/* Clock */}
             <div className="flex items-center gap-1.5 text-xs font-mono text-slate-400">
               <Clock className="w-3.5 h-3.5 text-slate-500" />
               <span className="text-slate-300 font-medium">{utcTime}</span>
@@ -93,7 +187,7 @@ export const Navbar = () => {
 
             <div className="h-4 w-px bg-slate-800" />
 
-            {/* Simple status indicator - not a futuristic HUD */}
+            {/* AI Status */}
             <div className="flex items-center gap-2 text-xs font-mono px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300">
               {showDetecting ? (
                 <>
@@ -153,6 +247,19 @@ export const Navbar = () => {
               {showDetecting ? 'AI Detecting...' : 'AI Model: Ready'}
             </span>
           </div>
+          {location && (
+            <div className="pt-2 flex items-center justify-between text-xs text-slate-300">
+              <span className="flex items-center gap-1 text-sky-400">
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{location.city}, {location.state}</span>
+              </span>
+              {proximity && (
+                <span className="font-mono text-amber-300 font-bold">
+                  {proximity.distanceKm} km to {detectedCyclone?.name} ({proximity.riskLevel})
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
     </header>

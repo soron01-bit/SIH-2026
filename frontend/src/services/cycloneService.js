@@ -188,13 +188,15 @@ export const cycloneService = {
       // Backend not yet running; fall back to client session / mock
     }
 
-    // Check localStorage for any actively analyzed storm
+    // Check localStorage for any actively analyzed storm and merge with all archived cyclones
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return { data: parsed, isMock: true };
+          const storedIds = new Set(parsed.map((p) => p.id));
+          const merged = [...parsed, ...MOCK_CYCLONES.filter((m) => !storedIds.has(m.id))];
+          return { data: merged, isMock: true };
         }
       }
     } catch (e) {

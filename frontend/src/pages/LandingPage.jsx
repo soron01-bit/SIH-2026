@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Compass,
-  Layers,
+  FileText,
   Bell,
   ArrowRight,
   Clock,
@@ -221,19 +221,19 @@ export const LandingPage = () => {
           </Link>
 
           <Link
-            to="/analysis"
+            to="/dashboard"
             className="group bg-[#0c1220] border border-slate-800 hover:border-slate-700 hover:bg-slate-850 rounded-lg p-4 transition-colors flex items-start gap-3"
           >
             <div className="p-2 rounded bg-slate-800 text-sky-400 group-hover:text-sky-300 transition-colors shrink-0">
-              <Layers className="w-4 h-4" />
+              <FileText className="w-4 h-4" />
             </div>
             <div className="space-y-0.5">
               <div className="text-sm font-semibold text-white flex items-center gap-1.5">
-                <span>AI Analysis</span>
+                <span>Cyclone Dossiers</span>
                 <ArrowRight className="w-3.5 h-3.5 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-sky-400" />
               </div>
               <p className="text-xs text-slate-400 font-normal">
-                Analyze satellite imagery
+                Reports for last 5 cyclones
               </p>
             </div>
           </Link>

@@ -152,58 +152,91 @@ export const TrackingPage = () => {
         </div>
       </div>
 
-      {/* MINIMAL MAP TOOLBAR */}
-      <div className="bg-[#0c1220] border border-slate-800 p-3 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-          {cyclones.length > 1 && (
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400">Target:</span>
-              <select
-                value={selectedCycloneId}
-                onChange={(e) => setSelectedCycloneId(e.target.value)}
-                className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white focus:outline-none"
-              >
-                {cyclones.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.classificationCode})
-                  </option>
-                ))}
-              </select>
+      {/* ENHANCED MAP TOOLBAR */}
+      <div className="bg-[#0c1220] border border-slate-800 rounded-lg overflow-hidden">
+        {/* Top bar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 text-xs border-b border-slate-800/60">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* View mode tabs */}
+            <div className="flex items-center rounded-md overflow-hidden border border-slate-800 bg-slate-900/60">
+              {['Satellite', 'Dark', 'Light'].map((mode) => (
+                <button
+                  key={mode}
+                  className="px-2.5 py-1.5 text-[11px] font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors first:text-white first:bg-slate-800"
+                >
+                  {mode}
+                </button>
+              ))}
             </div>
-          )}
 
-          <div className="flex items-center gap-2 text-slate-300">
-            <span className="text-slate-400">Basin:</span>
-            <span className="font-semibold text-sky-400">
-              {currentCyclone ? currentCyclone.basin : 'North Indian Ocean (Bay of Bengal & Arabian Sea)'}
-            </span>
+            {/* Cyclone target selector */}
+            {cyclones.length > 1 && (
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400">Target:</span>
+                <select
+                  value={selectedCycloneId}
+                  onChange={(e) => setSelectedCycloneId(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white focus:outline-none"
+                >
+                  {cyclones.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.classificationCode})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 text-slate-300">
+              <span className="text-slate-400">Basin:</span>
+              <span className="font-semibold text-sky-400">
+                {currentCyclone ? currentCyclone.basin : 'North Indian Ocean'}
+              </span>
+            </div>
           </div>
 
+          {/* Right side: live coordinates + wind */}
           {currentCyclone && (
-            <>
-              <span className="text-slate-700 hidden sm:inline">|</span>
-              <div className="text-slate-400 font-mono text-[11px] hidden sm:block">
-                Eye: <strong className="text-slate-200">{currentCyclone.latitude}°N, {currentCyclone.longitude}°E</strong>
+            <div className="flex items-center gap-3 font-mono text-[11px]">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800">
+                <span className="text-slate-400">Eye:</span>
+                <strong className="text-sky-400">{currentCyclone.latitude.toFixed(1)}°N, {currentCyclone.longitude.toFixed(1)}°E</strong>
               </div>
-              <span className="text-slate-700 hidden sm:inline">|</span>
-              <div className="text-slate-400 text-[11px] hidden sm:block">
-                Winds: <strong className="text-slate-200">{currentCyclone.windSpeedKmh} km/h</strong>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800">
+                <Wind className="w-3 h-3 text-amber-400" />
+                <strong className="text-white">{currentCyclone.windSpeedKnots} kt</strong>
               </div>
-            </>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800">
+                <Gauge className="w-3 h-3 text-orange-400" />
+                <strong className="text-white">{currentCyclone.pressureHpa} hPa</strong>
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Minimal display controls */}
-        <div className="flex items-center gap-4 self-start sm:self-auto">
-          <label className="flex items-center gap-2 cursor-pointer select-none text-slate-300 text-xs">
-            <input
-              type="checkbox"
-              checked={showCone}
-              onChange={(e) => setShowCone(e.target.checked)}
-              className="rounded bg-slate-900 border-slate-700 text-sky-600 focus:ring-0 cursor-pointer"
-            />
-            <span>Show Uncertainty Cone</span>
-          </label>
+        {/* Layer controls + legend strip */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 py-2 text-[11px]">
+          <span className="text-slate-400 font-semibold uppercase tracking-wider">Map Layers:</span>
+          {[
+            { label: 'Cyclone Track', color: '#38bdf8', active: true },
+            { label: 'Waypoints & Eye', color: '#f59e0b', active: true },
+            { label: 'Uncertainty Cone', color: '#94a3b8', active: showCone },
+          ].map(({ label, color, active }) => (
+            <button
+              key={label}
+              onClick={() => label === 'Uncertainty Cone' && setShowCone(!showCone)}
+              className={`flex items-center gap-1.5 transition-opacity ${active ? 'opacity-100' : 'opacity-40'}`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full border border-white/20" style={{ backgroundColor: color }} />
+              <span className="text-slate-300">{label}</span>
+            </button>
+          ))}
+          <span className="text-slate-700 mx-1">|</span>
+          <div className="flex items-center gap-3">
+            <span className="text-slate-500 font-semibold uppercase tracking-wider">Legend:</span>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-sky-400 inline-block" /><span className="text-slate-400">Past (observed)</span></div>
+            <div className="flex items-center gap-1.5"><span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400 inline-block" /><span className="text-slate-400">Forecast</span></div>
+          </div>
         </div>
       </div>
 

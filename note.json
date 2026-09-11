@@ -1,0 +1,221 @@
+# CYCLONEX: AI-Powered Tropical Cyclone Monitoring, Identification, Classification & Trajectory Prediction Platform
+
+**Smart India Hackathon 2026 (SIH 2026)**  
+**Problem Statement ID:** `SIH26070`  
+**Problem Statement Title:** *"To develop an Artificial Intelligence (AI) / Machine Learning (ML) based system for identification, classification, and prediction of different tropical cyclone patterns using multi-source satellite data."*
+
+---
+
+## 1. Project Overview
+
+**CYCLONEX** is a disaster management and meteorological situational awareness platform engineered for the North Indian Ocean basin (Bay of Bengal and Arabian Sea). It addresses the operational challenges faced by maritime agencies, meteorologists, and national disaster management authorities (NDRF, NDMA, State Disaster Management Authorities) in detecting cyclogenesis early, estimating storm intensity, and projecting trajectory cones of uncertainty using multi-source satellite data.
+
+The project is architected in phased milestones:
+- **Phase 1 (Completed):** Mission-critical Frontend UI, Routing, Leaflet Geospatial Tracking Engine, Recharts Intensity Telemetry, Satellite Analysis Studio, and Pluggable API Client.
+- **Phase 2 (Next):** Django REST Framework backend, PostgreSQL schema with GIS extensions, serializers, and endpoints.
+- **Phase 3:** End-to-end frontend-to-backend API connectivity.
+- **Phase 4:** ML inference service layer and model loader interface (`POST /api/analyze/`).
+- **Phase 5:** PyTorch deep learning weights (`cyclone_model.pth` with ResNet/EfficientNet + CNN-LSTM/GRU).
+
+---
+
+## 2. Key Capabilities & Features
+
+### 📡 Multi-Source Satellite Studio (`/analysis`)
+- Upload and inspect multi-spectral satellite imagery (`.png`, `.jpg`, `.tiff`, `.geotiff`, max 15MB).
+- Multi-spectral false-color band filtering: Thermal Infrared (TIR-1 10.8µm), Water Vapor (6.7µm), Visible spectrum, and High-Contrast Edge view.
+- Pluggable API client targeting `POST /api/analyze/`.
+- Strict prototype transparency: Clearly indicates *"AI Model Not Connected Yet"* with a testing toggle allowing evaluators to preview the simulated output schema.
+- Complete PyTorch tensor specification (`torch.Tensor[B,
+    4,
+    512,
+    512
+]`) and multi-task output head definitions.
+
+### 🌐 Geospatial Tracking Engine (`/tracking`)
+- Interactive Leaflet map powered by CartoDB DarkMatter basemap tiles.
+- Animated pulsating cyclone eye radar beacon.
+- 48-hour observed historical track points color-coded by IMD intensity categories.
+- 24-48 hour projected path line with dynamic **Cone of Uncertainty** error circles (e.g. ±35 km to ±140 km).
+- Interactive marker popups displaying UTC timestamps, sustained winds, barometric pressure, and stage.
+- Basin filter (Bay of Bengal, Arabian Sea, All Basins) and storm selector.
+- Synchronized chronological waypoints telemetry table.
+
+### 📊 Intensity & Telemetry Dashboard (`/dashboard`)
+- Primary telemetry badges: Max Sustained Wind Speed (knots and km/h), Central Barometric Pressure (hPa), Eye Centroid Coordinates (Lat/Lon), Model Confidence score, and Risk Level (`LOW`, `MODERATE`, `HIGH`, `EXTREME`).
+- Dual-axis Recharts intensity evolution graph comparing sustained winds against central pressure drop over time.
+- Integrated satellite feed preview with band toggles.
+- Real-time coastal sector warning bulletins.
+- Sensor ingest and pipeline health status indicators.
+
+### 📋 Comprehensive Storm Dossier (`/cyclones/:id`)
+- Deep-dive meteorological dossier for tracked cyclones (e.g., Cyclone Remal, Cyclone Biparjoy, Cyclone Mocha).
+- Twin historical charts: Sustained Wind Speed history & Barometric Pressure Drop profile.
+- Core morphological metrics: Eye diameter, Radius of Maximum Winds (RMW), gale wind extent (34 kt radii), and storm surge inundation forecast.
+- One-click track point export to CSV.
+
+### 🚨 Coastal Early Warning Bulletins (`/alerts`)
+- Multi-tier disaster alert cards conforming to standard India Meteorological Department (IMD) 4-stage color codes:
+  - **Red Alert (Extreme):** Post-landfall outlook, severe gale winds, extreme tidal inundation.
+  - **Orange Alert (High):** Cyclone warning, widespread squally winds, torrential rainfall.
+  - **Yellow Alert (Moderate):** Cyclone alert, rough seas, small craft advisories.
+  - **Green Advisory (Low):** Low pressure area convective monitoring.
+- Real-time search across states, districts, and hazard types.
+- Emergency authority directory with direct hotlines for NDRF, Indian Coast Guard SAR, and State Control Rooms (SEOC).
+
+---
+
+## 3. Technology Stack
+
+### Frontend (Phase 1)
+- **Framework:** React 18
+- **Build Tool:** Vite 8
+- **Styling:** Tailwind CSS 3.4 (custom meteorological dark command-center theme)
+- **Routing:** React Router v6
+- **Geospatial Mapping:** Leaflet 1.9 + React Leaflet 4.2 (CartoDB DarkMatter tiles)
+- **Telemetry Charts:** Recharts 2.12 (Composed, Area, and Line charts)
+- **HTTP Client:** Axios 1.7 (with transparent mock data fallback)
+- **Icons:** Lucide React
+
+### Backend (Phase 2 Target)
+- **Language:** Python 3.11+
+- **Framework:** Django 5.x & Django REST Framework (DRF)
+- **Database:** PostgreSQL with PostGIS / GIS extensions
+- **CORS:** `django-cors-headers`
+- **Environment Management:** `python-dotenv` / `django-environ`
+
+### Deep Learning & Inference (Phase 4/5 Target)
+- **Framework:** PyTorch & Torchvision
+- **Backbone Architectures:** ResNet-50 / EfficientNet-B4 (Feature Extractor)
+- **Temporal Prediction:** CNN + LSTM/GRU (movement displacement & intensity trend)
+- **Target Satellite Formats:** INSAT-3D/3DR (ISRO MOSDAC HDF5/GeoTIFF), NOAA AVHRR/VIIRS, NASA GPM IMERG
+
+---
+
+## 4. Repository & Folder Structure
+
+```
+SIH 2026/
+├── frontend/                                # Phase 1 Deliverable
+│   ├── index.html                           # App shell, fonts, Leaflet dark styles
+│   ├── package.json                         # Dependencies & npm scripts
+│   ├── vite.config.js                       # Vite configuration
+│   ├── tailwind.config.js                   # Meteorological palette & radar animations
+│   ├── postcss.config.js                    # PostCSS processing
+│   └── src/
+│       ├── main.jsx                         # Application entrypoint
+│       ├── App.jsx                          # Router configuration & main layout
+│       ├── index.css                        # Tailwind directives & mission-control CSS
+│       ├── components/
+│       │   ├── common/                      # Reusable atomic UI components
+│       │   │   ├── Navbar.jsx               # Navigation bar with live UTC/IST clocks
+│       │   │   ├── Footer.jsx               # SIH problem statement details & data attribution
+│       │   │   ├── Card.jsx                 # Glassmorphic card container
+│       │   │   ├── StatCard.jsx             # Metric telemetry card with trend indicator
+│       │   │   ├── Badge.jsx                # Severity and category badge
+│       │   │   ├── StatusIndicator.jsx      # Pulsating radar dot
+│       │   │   └── DemoNoticeBanner.jsx     # Top disclaimer banner
+│       │   ├── dashboard/                   # Dashboard-specific widgets
+│       │   │   ├── IntensityChart.jsx       # Recharts dual-axis wind & pressure graph
+│       │   │   ├── SatellitePreviewCard.jsx # Multi-spectral channel preview
+│       │   │   ├── QuickAlertsList.jsx      # Top active coastal bulletins
+│       │   │   └── SystemHealthCard.jsx     # Pipeline status & AI readiness card
+│       │   └── map/
+│       │       └── CycloneMap.jsx           # Leaflet interactive map with cone & track
+│       ├── pages/
+│       │   ├── LandingPage.jsx              # Hero, pipeline explanation, capabilities
+│       │   ├── DashboardPage.jsx            # Main command center
+│       │   ├── AnalysisPage.jsx             # Satellite upload & inference tester
+│       │   ├── TrackingPage.jsx             # Expanded Leaflet tracking & waypoints table
+│       │   ├── CycloneDetailsPage.jsx       # Deep-dive storm dossier & charts
+│       │   └── AlertsPage.jsx               # Early warning bulletins & helpline
+│       ├── services/
+│       │   ├── api.js                       # Centralized Axios client
+│       │   ├── cycloneService.js            # Cyclone endpoints with mock fallback
+│       │   ├── analysisService.js           # POST /api/analyze/ placeholder client
+│       │   └── alertService.js              # GET /api/alerts/ client
+│       └── data/
+│           ├── mockCyclones.js              # Realistic North Indian Ocean storm dataset
+│           ├── mockAlerts.js                # IMD-standard coastal warning bulletins
+│           └── mockSatelliteImages.js       # INSAT & NOAA reference presets
+├── backend/                                 # Reserved for Phase 2
+│   ├── manage.py
+│   ├── config/
+│   ├── apps/
+│   │   ├── cyclone/
+│   │   ├── alerts/
+│   │   └── analysis/
+│   └── ml/
+│       ├── inference.py
+│       ├── preprocessing.py
+│       ├── model_loader.py
+│       └── models/                          # Storage for cyclone_model.pth
+├── README.md                                # Master project documentation
+└── .env.example                             # Environment variables template
+```
+
+---
+
+## 5. Getting Started (Phase 1: Frontend)
+
+### Prerequisites
+- **Node.js:** v18.0.0 or higher (v20+ recommended)
+- **npm:** v9.0.0 or higher
+
+### Installation & Local Run
+
+1. **Clone the repository and enter the frontend directory:**
+   ```bash
+   cd "SIH 2026/frontend"
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the local development server:**
+   ```bash
+   npm run dev
+   ```
+
+4. **Open in browser:**
+   Navigate to [http: //localhost:5173](http://localhost:5173).
+
+5. **Build for production:**
+   ```bash
+   npm run build
+   ```
+
+---
+
+## 6. API Service Layer & Future Backend Integration
+
+The frontend uses a service layer (`frontend/src/services/`) designed to connect directly to the upcoming Django REST Framework backend:
+
+| Method | Endpoint | Service Call | Phase 1 Fallback Behavior |
+|---|---|---|---|
+| `GET` | `/api/cyclones/` | `cycloneService.getAll()` | Returns curated Bay of Bengal / Arabian Sea mock storms |
+| `GET` | `/api/cyclones/<id>/` | `cycloneService.getById(id)` | Returns storm dossier by identifier |
+| `GET` | `/api/cyclones/<id>/track/` | `cycloneService.getTrack(id)` | Returns historical waypoints and forecast cone |
+| `GET` | `/api/alerts/` | `alertService.getAll()` | Returns IMD-standard coastal bulletins |
+| `POST` | `/api/analyze/` | `analysisService.analyzeImage(file)` | Returns `{ status: "model_not_connected", message: "AI model is not connected yet."
+    }` |
+
+When the Django REST API is running on `http: //localhost:8000`, the frontend automatically transitions from demo fallback to live API responses without modifying UI code.
+
+---
+
+## 7. Upcoming Roadmap (Phases 2 to 5)
+
+- **Phase 2:** Initialize Django 5, DRF, and PostgreSQL models (`Cyclone`, `TrackPoint`, `Alert`, `Analysis`).
+- **Phase 3:** Implement Django serializers, views, and wire frontend Axios endpoints directly to PostgreSQL.
+- **Phase 4:** Create `backend/ml/` inference interface (`MLModelService`, `preprocess()`, `predict()`, `postprocess()`).
+- **Phase 5:** Plug in trained PyTorch weights (`cyclone_model.pth`) for automated feature extraction, classification, and trajectory forecasting.
+
+---
+
+## 8. License & Attribution
+
+Built for the **Smart India Hackathon 2026** under Problem Statement `SIH26070`.  
+Meteorological classification standards reference the **India Meteorological Department (IMD) / Regional Specialized Meteorological Centre (RSMC) New Delhi**.

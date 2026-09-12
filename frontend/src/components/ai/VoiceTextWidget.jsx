@@ -60,9 +60,15 @@ export const VoiceTextWidget = () => {
   const [inputText, setInputText] = useState('');
   const [lang, setLang] = useState('en');
   const [muted, setMuted] = useState(false);
-  const [speechListening, setSpeechListening] = useState(false);
+  const [liveVoiceActive, setLiveVoiceActive] = useState(false);
   const transcriptEndRef = useRef(null);
   const recognitionRef = useRef(null);
+  const silenceTimerRef = useRef(null);
+  const liveVoiceActiveRef = useRef(false);
+  const latestSpeechTextRef = useRef('');
+  const autoSendRef = useRef(null);
+
+  liveVoiceActiveRef.current = liveVoiceActive;
 
   const userLocationContext = location
     ? {
@@ -88,6 +94,51 @@ export const VoiceTextWidget = () => {
     activeCyclone: detectedCyclone,
   });
 
+  const stopSpeechRec = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { }
+      recognitionRef.current = null;
+    }
+  }, []);
+
+  // Auto-send callback for live voice mode
+  const autoSendVoiceTurn = useCallback(async (spokenText) => {
+    const text = (spokenText || latestSpeechTextRef.current || '').trim();
+    if (!text) return;
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
+    // Temporarily pause recognition while assistant is thinking & speaking
+    stopSpeechRec();
+    live.stopMic();
+    setInputText('');
+    latestSpeechTextRef.current = '';
+
+    await live.sendText(text, lang, {
+      speak: !muted,
+      onSpeechEnd: () => {
+        // When assistant finishes speaking aloud, resume listening if live mode is still active!
+        if (liveVoiceActiveRef.current && !muted) {
+          setTimeout(() => {
+            if (liveVoiceActiveRef.current) {
+              startSpeechRec();
+              live.startMic();
+            }
+          }, 350);
+        }
+      },
+    });
+  }, [lang, muted, live, stopSpeechRec]);
+
+  autoSendRef.current = autoSendVoiceTurn;
+
   // Browser SpeechRecognition companion for instant speech-to-text feedback
   const startSpeechRec = useCallback(() => {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -108,35 +159,39 @@ export const VoiceTextWidget = () => {
         }
         if (text) {
           setInputText(text);
+          latestSpeechTextRef.current = text;
+
+          // LIVE CONVERSATION AUTO-SEND: If user pauses for 1.3s, auto-send and speak back!
+          if (liveVoiceActiveRef.current) {
+            if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = setTimeout(() => {
+              if (autoSendRef.current && text.trim()) {
+                autoSendRef.current(text.trim());
+              }
+            }, 1300);
+          }
         }
       };
 
       rec.onerror = (e) => {
         console.warn('SpeechRecognition note:', e.error);
-        setSpeechListening(false);
       };
 
       rec.onend = () => {
-        setSpeechListening(false);
+        // If live voice mode is active and not currently speaking, automatically keep connection alive
+        if (liveVoiceActiveRef.current && !live.isSpeaking && !live.isThinking) {
+          try { rec.start(); } catch {}
+        }
       };
 
       rec.start();
       recognitionRef.current = rec;
-      setSpeechListening(true);
       return true;
     } catch (err) {
       console.warn('SpeechRecognition init note:', err);
       return false;
     }
-  }, [lang]);
-
-  const stopSpeechRec = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { }
-      recognitionRef.current = null;
-    }
-    setSpeechListening(false);
-  }, []);
+  }, [lang, live.isSpeaking, live.isThinking]);
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -149,8 +204,11 @@ export const VoiceTextWidget = () => {
       live.connect();
     }
     if (!expanded) {
+      setLiveVoiceActive(false);
+      liveVoiceActiveRef.current = false;
       stopSpeechRec();
       live.stopMic();
+      live.stopAudio();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
@@ -158,8 +216,26 @@ export const VoiceTextWidget = () => {
   const handleSend = (e) => {
     e?.preventDefault();
     if (!inputText.trim()) return;
-    live.sendText(inputText.trim(), lang, { speak: !muted });
+    try { window.speechSynthesis?.resume(); } catch {}
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
+    const textToSend = inputText.trim();
     setInputText('');
+    latestSpeechTextRef.current = '';
+
+    live.sendText(textToSend, lang, {
+      speak: !muted,
+      onSpeechEnd: () => {
+        if (liveVoiceActiveRef.current && !muted) {
+          setTimeout(() => {
+            if (liveVoiceActiveRef.current) {
+              startSpeechRec();
+              live.startMic();
+            }
+          }, 350);
+        }
+      },
+    });
   };
 
   const handleKeyDown = (e) => {
@@ -169,23 +245,35 @@ export const VoiceTextWidget = () => {
     }
   };
 
-  const isCurrentlyListening = live.isListening || speechListening;
-
+  // Toggle Live Voice Conversation Mode
   const toggleMic = async () => {
-    if (isCurrentlyListening) {
+    try { window.speechSynthesis?.resume(); } catch {}
+
+    if (liveVoiceActive) {
+      // User tapped to turn OFF Live Mode
+      setLiveVoiceActive(false);
+      liveVoiceActiveRef.current = false;
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       stopSpeechRec();
       const audioBase64 = await live.stopMic();
+      live.stopAudio();
+
+      // If user had spoken something right before toggling off, send it:
       if (inputText.trim()) {
         const textToSend = inputText.trim();
         setInputText('');
+        latestSpeechTextRef.current = '';
         live.sendText(textToSend, lang, { speak: !muted });
       } else if (audioBase64) {
         live.sendAudioTurn(audioBase64, lang, { speak: !muted });
-      } else {
-        live.sendText('Current status of ' + (detectedCyclone?.name || 'cyclone'), lang, { speak: !muted });
       }
     } else {
+      // User tapped to turn ON Live Mode
+      setLiveVoiceActive(true);
+      liveVoiceActiveRef.current = true;
       live.stopAudio();
+      setInputText('');
+      latestSpeechTextRef.current = '';
       startSpeechRec();
       live.startMic();
     }
@@ -245,14 +333,14 @@ export const VoiceTextWidget = () => {
               {live.isSpeaking && !muted && <Volume2 className="w-3 h-3 text-emerald-400" />}
             </div>
             <div className="text-[10px] text-slate-400 flex items-center gap-1">
-              {live.isListening ? (
-                <><span className="text-emerald-400 font-medium">● 3.1 Live Listening...</span><Waveform active color="#34d399" /></>
-              ) : live.isSpeaking ? (
-                <><span className="text-sky-400 font-medium">● 3.1 Live Speaking</span><Waveform active color="#38bdf8" /></>
+              {live.isSpeaking ? (
+                <><span className="text-emerald-400 font-medium">● CycloneAI Speaking</span><Waveform active color="#34d399" /></>
               ) : live.isThinking ? (
-                <span className="text-violet-300 animate-pulse font-medium">● 3.6 Flash reasoning...</span>
+                <span className="text-violet-300 animate-pulse font-medium">● Reasoning…</span>
+              ) : liveVoiceActive ? (
+                <><span className="text-sky-400 font-medium">● Live Listening</span><Waveform active color="#38bdf8" /></>
               ) : (
-                <span className="text-slate-400">🎙️ 3.1 Live · 💬 3.6 Flash</span>
+                <span className="text-slate-400">🎙️ Live Voice · 💬 2.5 Flash</span>
               )}
             </div>
           </div>
@@ -440,21 +528,27 @@ export const VoiceTextWidget = () => {
           <button
             type="button"
             onClick={toggleMic}
-            className={`p-2 rounded-lg transition-all ${isCurrentlyListening
-                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110'
+            className={`p-2 rounded-lg transition-all ${liveVoiceActive
+                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110 animate-pulse'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
               }`}
-            title={isCurrentlyListening ? 'Stop recording & send' : 'Start voice input'}
+            title={liveVoiceActive ? 'Stop Live Conversation' : 'Start Live Voice Conversation'}
             disabled={live.isConnecting}
           >
-            {isCurrentlyListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {liveVoiceActive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </button>
         </form>
 
-        {isCurrentlyListening && (
-          <div className="mt-2 flex items-center justify-center gap-2 text-xs text-emerald-400">
-            <Waveform active color="#34d399" />
-            <span>Listening in {LANG_LABELS[lang] || 'English'} — tap mic to finish & send</span>
+        {liveVoiceActive && (
+          <div className="mt-2 flex items-center justify-center gap-2 text-xs text-sky-400 font-medium">
+            <Waveform active color="#38bdf8" />
+            <span>
+              {live.isSpeaking
+                ? 'CycloneAI is speaking aloud…'
+                : live.isThinking
+                ? 'Reasoning…'
+                : `Live in ${LANG_LABELS[lang] || 'EN'} — speak anytime, auto-replies on pause`}
+            </span>
           </div>
         )}
       </div>

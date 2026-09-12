@@ -199,19 +199,30 @@ export function useGeminiLive({
   }, []);
 
   // ── Web Speech Synthesis (Text-to-Speech) ─────────────────────────────────
-  const speakText = useCallback((text, lang = 'en') => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  const speakText = useCallback((text, lang = 'en', onSpeechEnd = null) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      onSpeechEnd?.();
+      return;
+    }
     try {
       window.speechSynthesis.cancel();
+      try { window.speechSynthesis.resume(); } catch {}
+
+      // Strip markdown bold, italics, bullets, headers, links
       const clean = (text || '')
         .replace(/[*#_~`]/g, '')
         .replace(/https?:\/\/\S+/g, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
         .trim();
-      if (!clean) return;
+      if (!clean) {
+        onSpeechEnd?.();
+        return;
+      }
 
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
+      utterance.volume = 1.0;
 
       if (lang === 'bn') {
         utterance.lang = 'bn-IN';
@@ -226,14 +237,34 @@ export function useGeminiLive({
       const matched = voices.find((v) => v.lang.toLowerCase().startsWith(targetLang));
       if (matched) utterance.voice = matched;
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      let ended = false;
+      const handleDone = () => {
+        if (ended) return;
+        ended = true;
+        setIsSpeaking(false);
+        onSpeechEnd?.();
+      };
 
-      window.speechSynthesis.speak(utterance);
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = handleDone;
+      utterance.onerror = (e) => {
+        console.warn('SpeechSynthesis error:', e);
+        handleDone();
+      };
+
+      setTimeout(() => {
+        try {
+          window.speechSynthesis.resume();
+          window.speechSynthesis.speak(utterance);
+        } catch (err) {
+          console.warn('Speak error:', err);
+          handleDone();
+        }
+      }, 40);
     } catch (e) {
       console.warn('Speech synthesis note:', e);
       setIsSpeaking(false);
+      onSpeechEnd?.();
     }
   }, []);
 
@@ -507,7 +538,9 @@ export function useGeminiLive({
     addMessage('assistant', assistantReply, lang);
 
     if (options.speak) {
-      speakText(assistantReply, lang);
+      speakText(assistantReply, lang, options.onSpeechEnd);
+    } else {
+      options.onSpeechEnd?.();
     }
 
     setIsThinking(false);
@@ -584,7 +617,9 @@ export function useGeminiLive({
     addMessage('assistant', assistantReply, lang);
 
     if (options.speak !== false) {
-      speakText(assistantReply, lang);
+      speakText(assistantReply, lang, options.onSpeechEnd);
+    } else {
+      options.onSpeechEnd?.();
     }
 
     setIsThinking(false);

@@ -113,77 +113,156 @@ LOCATION GUIDANCE:
    - Provide clear, reassuring, safety-first guidance tailored to their distance and language.`;
     }
 
-    // ── CASE 1: Audio Input (Voice Mode) ───────────────────────────────────
+    function detectUserLanguage(text = '', preferred = 'auto') {
+      const str = (text || '').trim();
+      if (!str) return (preferred && preferred !== 'auto') ? preferred : 'en';
+      if (/[\u0980-\u09FF]/.test(str)) return 'bn';
+      if (/[\u0900-\u097F]/.test(str)) return 'hi';
+      if (/\b(kothay|ache|jhor|hobe|ekhon|amader|ekhane|brishti|kemon|landfall|bhalo|khobor|naam|shohor|sahajjo|ami|tumi|apni|kichu|bolchen|bolun|bujhte|parchi|shunun|dhoron)\b/i.test(str)) {
+        return 'bn';
+      }
+      if (/\b(kahan|kaha|hai|hoga|khatra|hawa|surakshit|aandhi|toofan|madad|batao|kya|kaise|sunao|namaste|shukriya|bachav|kitna|dur)\b/i.test(str)) {
+        return 'hi';
+      }
+      if (/\b(what|where|how|is|are|the|cyclone|storm|wind|speed|distance|safe|safety|alert|advisory|track|weather|status|rain|landfall|shelter|hello|hi|help|will|can)\b/i.test(str)) {
+        return 'en';
+      }
+      if (/^[a-zA-Z0-9\s.,?!'"\-:;()]+$/.test(str)) {
+        return 'en';
+      }
+      return (preferred && preferred !== 'auto') ? preferred : 'en';
+    }
+
+    const textHint = body.textHint || '';
+    const effectiveLang = detectUserLanguage(cleanMessage || textHint, language);
+
+    let langInstruction = '';
+    if (effectiveLang === 'bn') {
+      langInstruction = `
+CRITICAL REQUIREMENT: The user communicated in BENGALI (বাংলা).
+You MUST formulate your entire reply 100% in natural BENGALI (বাংলা script).
+Do NOT respond in English or transliterated script. Keep answer concise under 3 sentences.`;
+    } else if (effectiveLang === 'hi') {
+      langInstruction = `
+CRITICAL REQUIREMENT: The user communicated in HINDI (हिन्दी).
+You MUST formulate your entire reply 100% in natural HINDI (हिन्दी script).
+Do NOT respond in English. Keep answer concise under 3 sentences.`;
+    } else {
+      langInstruction = `
+CRITICAL REQUIREMENT: The user communicated in ENGLISH.
+You MUST formulate your entire reply 100% in natural, fluent ENGLISH. Keep answer concise under 3 sentences.`;
+    }
+
+    // ── CASE 1: Audio Input (Direct Gemini Multimodal Audio Understanding) ──────
     if (audio) {
       if (apiKey) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-          const prompt = `${SYSTEM_INSTRUCTION}
+        const audioModelsToTry = [
+          'gemini-3.1-flash-lite',
+          'gemini-flash-latest',
+          body.model,
+          'gemini-3.5-flash',
+          'gemini-3.6-flash',
+          'gemini-2.5-flash',
+        ].filter(Boolean);
+
+        const hintClause = textHint ? `\n(Speech recognition transcription hint: "${textHint}")` : '';
+
+        const audioPrompt = `You are CycloneAI, an expert conversational meteorological voice agent for the Cyclone Intelligence Dashboard.
+Listen carefully to the user's spoken audio.${hintClause}
 ${locationContext}
-Listen carefully to the user's spoken audio. It may be in English, Hindi (हिन्दी), or Bengali (বাংলা).
-Respond in valid JSON format:
+
+CRITICAL LANGUAGE MIRRORING RULES:
+1. DETECT THE USER'S SPOKEN LANGUAGE WITH 100% ACCURACY:
+   - English: If the user speaks English -> "detectedLanguage": "en", formulate "userText" in English, formulate "reply" 100% in natural, fluent English.
+   - Bengali (বাংলা or Banglish): If the user speaks Bengali -> "detectedLanguage": "bn", formulate "userText" in authentic Bengali script (বাংলা), formulate "reply" 100% in natural, fluent Bengali (বাংলা লিপিতে).
+   - Hindi (हिन्दी or Hinglish): If the user speaks Hindi -> "detectedLanguage": "hi", formulate "userText" in authentic Hindi script (हिन्दी), formulate "reply" 100% in natural, fluent Hindi (हिन्दी लिपि में).
+2. YOUR REPLY LANGUAGE MUST MATCH THE USER'S SPOKEN LANGUAGE EXACTLY. NEVER respond in a different language than the user spoke.
+3. Keep spoken replies concise (2 to 3 sentences max) so they sound lively and engaging when spoken by the voice agent.
+4. NEVER repeat canned or identical static sentences! Every turn must be fresh, dynamic, and directly address the user's specific words, query, or question.
+5. If the audio is an initial greeting or test audio, introduce yourself warmly as CycloneAI in the user's language and ask how you can help track the storm.
+
+Respond strictly in valid JSON format:
 {
-  "userText": "transcription of what the user said in their spoken language",
-  "reply": "concise, expert response to their question in their spoken language (under 3 sentences)"
+  "detectedLanguage": "en" | "bn" | "hi",
+  "userText": "accurate transcription in the speaker's language",
+  "reply": "expert, conversational response answering the user in the EXACT SAME language they spoke"
 }`;
 
-          const geminiRes = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{
-                role: 'user',
-                parts: [
-                  { inlineData: { mimeType: 'audio/wav', data: audio } },
-                  { text: prompt }
-                ]
-              }],
-              generationConfig: {
-                responseMimeType: 'application/json'
-              }
-            }),
-          });
+        for (const model of audioModelsToTry) {
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const geminiRes = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  role: 'user',
+                  parts: [
+                    { inlineData: { mimeType: 'audio/wav', data: audio } },
+                    { text: audioPrompt }
+                  ]
+                }],
+                generationConfig: {
+                  responseMimeType: 'application/json',
+                  temperature: 0.8,
+                }
+              }),
+            });
 
-          if (geminiRes.ok) {
-            const data = await geminiRes.json();
-            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (rawText) {
-              try {
-                const parsed = JSON.parse(rawText);
-                return res.status(200).json({
-                  userText: parsed.userText || 'Voice Query',
-                  reply: parsed.reply || rawText,
-                  modelUsed: 'gemini-2.5-flash-audio',
-                });
-              } catch {
-                return res.status(200).json({
-                  userText: 'Voice Query',
-                  reply: rawText,
-                  modelUsed: 'gemini-2.5-flash-audio',
-                });
+            if (geminiRes.ok) {
+              const data = await geminiRes.json();
+              const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (rawText) {
+                try {
+                  const parsed = JSON.parse(rawText);
+                  let detLang = parsed.detectedLanguage;
+                  const hasBnReply = /[\u0980-\u09FF]/.test(parsed.reply || '');
+                  const hasHiReply = /[\u0900-\u097F]/.test(parsed.reply || '');
+                  if (!detLang || !['en', 'bn', 'hi'].includes(detLang)) {
+                    detLang = hasBnReply ? 'bn' : hasHiReply ? 'hi' : 'en';
+                  }
+                  return res.status(200).json({
+                    userText: parsed.userText || textHint || 'Voice Query',
+                    reply: parsed.reply || rawText,
+                    modelUsed: model,
+                    detectedLanguage: detLang,
+                  });
+                } catch {
+                  const hasBn = /[\u0980-\u09FF]/.test(rawText);
+                  const hasHi = /[\u0900-\u097F]/.test(rawText);
+                  return res.status(200).json({
+                    userText: textHint || 'Voice Query',
+                    reply: rawText,
+                    modelUsed: model,
+                    detectedLanguage: hasBn ? 'bn' : hasHi ? 'hi' : 'en',
+                  });
+                }
               }
             }
+          } catch (err) {
+            console.warn(`[Vercel API] Audio fetch failed on ${model}:`, err.message);
           }
-        } catch (err) {
-          console.warn('[Vercel API] Audio fetch failed:', err.message);
         }
       }
 
       // Audio fallback when no API key or Gemini failed
-      const fallbackReply = buildFallbackResponse({
-        message: 'voice query status',
-        language,
-        userLocation,
-      });
-
+      const city = userLocation?.city || (effectiveLang === 'bn' ? 'আপনার এলাকা' : effectiveLang === 'hi' ? 'आपका क्षेत्र' : 'your area');
+      const storm = userLocation?.activeCycloneName || (effectiveLang === 'bn' ? 'ঘূর্ণিঝড়' : effectiveLang === 'hi' ? 'चक्रवात' : 'the storm');
+      let fallbackReply = `Currently tracking ${storm}. Please maintain vigilance in ${city} and coastal regions.`;
+      if (effectiveLang === 'bn') {
+        fallbackReply = `বর্তমানে ${storm}-এর স্যাটেলাইট ডেটা বিশ্লেষণ চলছে। ${city} ও উপকূলীয় এলাকায় সতর্ক থাকুন।`;
+      } else if (effectiveLang === 'hi') {
+        fallbackReply = `वर्तमान में ${storm} का उपग्रह डेटा विश्लेषण चल रहा है। ${city} और तटीय क्षेत्रों में सतर्क रहें।`;
+      }
       return res.status(200).json({
-        userText: language === 'bn' ? 'ভয়েস প্রশ্ন' : language === 'hi' ? 'वॉयस प्रश्न' : 'Voice Query',
+        userText: textHint || 'ভয়েস বার্তা',
         reply: fallbackReply,
         modelUsed: 'cyclone-ai-telemetry-engine',
+        detectedLanguage: effectiveLang,
       });
     }
 
-    // ── CASE 2: Text Message ───────────────────────────────────────────────
+    // ── CASE 2: Text Message (The 3 Gemini Models) ─────────────────────────
     if (apiKey && cleanMessage) {
       const contents = [];
       for (const turn of history.slice(-6)) {
@@ -197,7 +276,7 @@ Respond in valid JSON format:
         parts: [{ text: cleanMessage }],
       });
 
-      const fullInstruction = `${SYSTEM_INSTRUCTION}\n${locationContext}\nUser language: ${language}. Keep answer under 3-4 sentences.`;
+      const fullInstruction = `${SYSTEM_INSTRUCTION}\n${locationContext}\n${langInstruction}\nKeep answer under 3-4 sentences.`;
 
       const payload = {
         contents,
@@ -211,15 +290,15 @@ Respond in valid JSON format:
       };
 
       const modelsToTry = [
-        process.env.GEMINI_TEXT_MODEL || 'gemini-2.5-flash',
-        'gemini-2.5-flash',
+        body.model,
+        'gemini-3.1-flash-lite',
         'gemini-flash-latest',
         'gemini-3.6-flash',
         'gemini-3.5-flash',
-        'gemini-2.5-flash-lite',
-      ];
+        'gemini-2.5-flash',
+      ].filter(Boolean);
 
-      for (const model of modelsToTry) {
+      for (const model of modelsToTry.filter(Boolean)) {
         try {
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           const geminiRes = await fetch(url, {
@@ -240,9 +319,15 @@ Respond in valid JSON format:
 
           const replyText = json.candidates?.[0]?.content?.parts?.[0]?.text;
           if (replyText) {
+            const finalReplyLang = /[\u0980-\u09FF]/.test(replyText)
+              ? 'bn'
+              : /[\u0900-\u097F]/.test(replyText)
+              ? 'hi'
+              : effectiveLang;
             return res.status(200).json({
               reply: replyText,
               modelUsed: model,
+              detectedLanguage: finalReplyLang,
             });
           }
         } catch (err) {
@@ -254,13 +339,14 @@ Respond in valid JSON format:
     // Telemetry and Knowledge Fallback (guaranteed response)
     const fallbackReply = buildFallbackResponse({
       message: cleanMessage,
-      language,
+      language: effectiveLang,
       userLocation,
     });
 
     return res.status(200).json({
       reply: fallbackReply,
       modelUsed: 'cyclone-ai-telemetry-engine',
+      detectedLanguage: effectiveLang,
     });
   } catch (error) {
     console.error('[Vercel API] Chat handler error:', error);

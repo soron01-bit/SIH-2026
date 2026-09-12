@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mic, MicOff, Send, X, MessageSquare, ChevronDown,
-  Volume2, VolumeX, Trash2, AlertCircle, Loader2, Globe, MapPin,
+  Volume2, VolumeX, Trash2, AlertCircle, Loader2, Globe, MapPin, Sparkles,
 } from 'lucide-react';
 import useGeminiLive from './useGeminiLive';
 import { buildToolHandlers } from './dashboardTools';
@@ -58,11 +58,22 @@ export const VoiceTextWidget = () => {
 
   const [expanded, setExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
-  const [lang, setLang] = useState('en');
+  const [lang, setLang] = useState('bn');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.1-flash-lite');
   const [muted, setMuted] = useState(false);
   const [speechListening, setSpeechListening] = useState(false);
+  const [continuousVoiceActive, setContinuousVoiceActive] = useState(false);
+  const [detectedVoice, setDetectedVoice] = useState('');
+  const continuousVoiceActiveRef = useRef(false);
+  const isSendingRef = useRef(false);
+  const spokenVoiceRef = useRef('');
+  const silenceTimerRef = useRef(null);
+  const finishVoiceRef = useRef(null);
+  const startSpeechRecRef = useRef(null);
   const transcriptEndRef = useRef(null);
   const recognitionRef = useRef(null);
+
+  continuousVoiceActiveRef.current = continuousVoiceActive;
 
   const userLocationContext = location
     ? {
@@ -88,7 +99,104 @@ export const VoiceTextWidget = () => {
     activeCyclone: detectedCyclone,
   });
 
-  // Browser SpeechRecognition companion for instant speech-to-text feedback
+  const isCurrentlyListening = continuousVoiceActive || live.isListening || speechListening;
+
+  const stopSpeechRec = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { }
+      recognitionRef.current = null;
+    }
+    setSpeechListening(false);
+  }, []);
+
+  // Finish voice query and directly send to AI (single-send locked, hands-free loop, always analyze audio with Gemini)
+  const finishVoiceAndAnswer = useCallback(async () => {
+    // 1. Guard against duplicate calls:
+    if (isSendingRef.current) return;
+    isSendingRef.current = true;
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+
+    const spokenQuery = (spokenVoiceRef.current || '').trim();
+    spokenVoiceRef.current = '';
+    setDetectedVoice('');
+
+    // Pause recording while CycloneAI speaks
+    stopSpeechRec();
+    const audioBase64 = await live.stopMic();
+
+    if (!spokenQuery && !audioBase64) {
+      isSendingRef.current = false;
+      return;
+    }
+
+    const hasBnQuery = /[\u0980-\u09FF]/.test(spokenQuery) ||
+      /\b(kothay|ache|jhor|hobe|ekhon|amader|ekhane|brishti|kemon|landfall|bhalo|khobor|naam|shohor|sahajjo)\b/i.test(spokenQuery);
+    const hasHiQuery = /[\u0900-\u097F]/.test(spokenQuery) ||
+      /\b(kahan|kaha|hai|hoga|khatra|hawa|surakshit|aandhi|toofan|madad|batao|kya|kaise)\b/i.test(spokenQuery);
+    const hasEnQuery = /\b(what|where|how|is|are|the|cyclone|storm|wind|speed|distance|safe|safety|alert|advisory|track|weather|status|rain|landfall|shelter|hello|hi|help|will|can)\b/i.test(spokenQuery) ||
+      (/^[a-zA-Z0-9\s.,?!'"\-:;()]+$/.test(spokenQuery) && spokenQuery.length > 2);
+
+    const queryLang = hasBnQuery ? 'bn' : hasHiQuery ? 'hi' : hasEnQuery ? 'en' : (lang || 'en');
+    if (queryLang !== lang) {
+      setLang(queryLang);
+    }
+
+    const options = {
+      speak: !muted,
+      isVoice: true, // Suppresses user voice bubble from chat transcript!
+      model: selectedModel,
+      onLanguageDetected: (detected) => {
+        if (detected && detected !== lang) {
+          setLang(detected);
+        }
+      },
+      onSpeechEnd: () => {
+        // Continuous hands-free conversation loop:
+        // Automatically resumes listening after CycloneAI finishes speaking aloud!
+        if (continuousVoiceActiveRef.current && !muted) {
+          setTimeout(() => {
+            if (continuousVoiceActiveRef.current) {
+              spokenVoiceRef.current = '';
+              isSendingRef.current = false;
+              startSpeechRecRef.current?.();
+              live.startMic();
+            } else {
+              isSendingRef.current = false;
+            }
+          }, 350);
+        } else {
+          isSendingRef.current = false;
+        }
+      },
+    };
+
+    try {
+      if (audioBase64) {
+        // ALWAYS analyze user voice with Gemini multimodal understanding!
+        await live.sendAudioTurn(audioBase64, queryLang, {
+          ...options,
+          textHint: spokenQuery,
+        });
+      } else if (spokenQuery) {
+        await live.sendText(spokenQuery, queryLang, options);
+      }
+    } catch (err) {
+      console.warn('Voice query error:', err);
+      isSendingRef.current = false;
+    }
+  }, [lang, muted, live, stopSpeechRec, selectedModel]);
+
+  finishVoiceRef.current = finishVoiceAndAnswer;
+
+  // Browser SpeechRecognition companion for live speech detection (no typing into text bar!)
   const startSpeechRec = useCallback(() => {
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRec) return false;
@@ -106,8 +214,29 @@ export const VoiceTextWidget = () => {
         for (let i = 0; i < e.results.length; i++) {
           text += e.results[i][0].transcript;
         }
-        if (text) {
-          setInputText(text);
+        if (text && !isSendingRef.current) {
+          spokenVoiceRef.current = text;
+          setDetectedVoice(text);
+
+          if (/[\u0980-\u09FF]/.test(text)) {
+            setLang('bn');
+          } else if (/[\u0900-\u097F]/.test(text)) {
+            setLang('hi');
+          } else if (/\b(kothay|ache|jhor|hobe|ekhon|amader|ekhane|brishti|kemon|landfall|bhalo|khobor|naam|shohor|sahajjo)\b/i.test(text)) {
+            setLang('bn');
+          } else if (/\b(kahan|kaha|hai|hoga|khatra|hawa|surakshit|aandhi|toofan|madad|batao|kya|kaise)\b/i.test(text)) {
+            setLang('hi');
+          } else if (/\b(what|where|how|is|are|the|cyclone|storm|wind|speed|distance|safe|safety|alert|advisory|track|weather|status|rain|landfall|shelter|hello|hi|help|will|can)\b/i.test(text)) {
+            setLang('en');
+          }
+
+          // Direct auto-answer on natural pause (1.4s)
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (finishVoiceRef.current && !isSendingRef.current) {
+              finishVoiceRef.current();
+            }
+          }, 1400);
         }
       };
 
@@ -117,7 +246,11 @@ export const VoiceTextWidget = () => {
       };
 
       rec.onend = () => {
-        setSpeechListening(false);
+        if (continuousVoiceActiveRef.current && !live.isSpeaking && !live.isThinking && !isSendingRef.current) {
+          try { rec.start(); } catch { }
+        } else {
+          setSpeechListening(false);
+        }
       };
 
       rec.start();
@@ -128,15 +261,9 @@ export const VoiceTextWidget = () => {
       console.warn('SpeechRecognition init note:', err);
       return false;
     }
-  }, [lang]);
+  }, [lang, live.isSpeaking, live.isThinking]);
 
-  const stopSpeechRec = useCallback(() => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch { }
-      recognitionRef.current = null;
-    }
-    setSpeechListening(false);
-  }, []);
+  startSpeechRecRef.current = startSpeechRec;
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -149,16 +276,50 @@ export const VoiceTextWidget = () => {
       live.connect();
     }
     if (!expanded) {
+      setContinuousVoiceActive(false);
+      continuousVoiceActiveRef.current = false;
       stopSpeechRec();
       live.stopMic();
+      live.stopAudio?.();
+      setDetectedVoice('');
+      spokenVoiceRef.current = '';
+      isSendingRef.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
 
+  // Manual typing send handler (keyboard only)
   const handleSend = (e) => {
     e?.preventDefault();
-    if (!inputText.trim()) return;
-    live.sendText(inputText.trim(), lang, { speak: !muted });
+    const text = inputText.trim();
+    if (!text) return;
+    if (isCurrentlyListening) {
+      setContinuousVoiceActive(false);
+      continuousVoiceActiveRef.current = false;
+      stopSpeechRec();
+      live.stopMic();
+    }
+    const hasBn = /[\u0980-\u09FF]/.test(text) ||
+      /\b(kothay|ache|jhor|hobe|ekhon|amader|ekhane|brishti|kemon|landfall|bhalo|khobor|naam|shohor|sahajjo)\b/i.test(text);
+    const hasHi = /[\u0900-\u097F]/.test(text) ||
+      /\b(kahan|kaha|hai|hoga|khatra|hawa|surakshit|aandhi|toofan|madad|batao|kya|kaise)\b/i.test(text);
+    const hasEn = /\b(what|where|how|is|are|the|cyclone|storm|wind|speed|distance|safe|safety|alert|advisory|track|weather|status|rain|landfall|shelter|hello|hi|help|will|can)\b/i.test(text) ||
+      (/^[a-zA-Z0-9\s.,?!'"\-:;()]+$/.test(text) && text.length > 2);
+
+    const inputLang = hasBn ? 'bn' : hasHi ? 'hi' : hasEn ? 'en' : (lang || 'en');
+    if (inputLang !== lang) {
+      setLang(inputLang);
+    }
+
+    live.sendText(text, inputLang, {
+      speak: !muted,
+      model: selectedModel,
+      onLanguageDetected: (detected) => {
+        if (detected && detected !== lang) {
+          setLang(detected);
+        }
+      },
+    });
     setInputText('');
   };
 
@@ -169,23 +330,30 @@ export const VoiceTextWidget = () => {
     }
   };
 
-  const isCurrentlyListening = live.isListening || speechListening;
-
   const toggleMic = async () => {
-    if (isCurrentlyListening) {
-      stopSpeechRec();
-      const audioBase64 = await live.stopMic();
-      if (inputText.trim()) {
-        const textToSend = inputText.trim();
-        setInputText('');
-        live.sendText(textToSend, lang, { speak: !muted });
-      } else if (audioBase64) {
-        live.sendAudioTurn(audioBase64, lang, { speak: !muted });
-      } else {
-        live.sendText('Current status of ' + (detectedCyclone?.name || 'cyclone'), lang, { speak: !muted });
+    live.unlockAudio?.();
+    if (continuousVoiceActive) {
+      // Tap mic to STOP hands-free continuous conversation
+      setContinuousVoiceActive(false);
+      continuousVoiceActiveRef.current = false;
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
       }
-    } else {
+      stopSpeechRec();
+      live.stopMic();
       live.stopAudio();
+      isSendingRef.current = false;
+      spokenVoiceRef.current = '';
+      setDetectedVoice('');
+    } else {
+      // Tap mic ONCE to START hands-free continuous conversation
+      setContinuousVoiceActive(true);
+      continuousVoiceActiveRef.current = true;
+      live.stopAudio();
+      spokenVoiceRef.current = '';
+      setDetectedVoice('');
+      isSendingRef.current = false;
       startSpeechRec();
       live.startMic();
     }
@@ -213,7 +381,7 @@ export const VoiceTextWidget = () => {
           ))}
         </div>
         <div className="w-px h-4 bg-white/20" />
-        <Mic className="w-3.5 h-3.5 opacity-70" />
+        <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded font-mono">Gemini 3.6 / 3.5 / 3.1</span>
       </button>
     );
   }
@@ -245,14 +413,18 @@ export const VoiceTextWidget = () => {
               {live.isSpeaking && !muted && <Volume2 className="w-3 h-3 text-emerald-400" />}
             </div>
             <div className="text-[10px] text-slate-400 flex items-center gap-1">
-              {live.isListening ? (
-                <><span className="text-emerald-400 font-medium">● 3.1 Live Listening...</span><Waveform active color="#34d399" /></>
+              {isCurrentlyListening ? (
+                <><span className="text-sky-400 font-medium">● 3.1 Live Listening ({LANG_LABELS[lang]})...</span><Waveform active color="#38bdf8" /></>
               ) : live.isSpeaking ? (
-                <><span className="text-sky-400 font-medium">● 3.1 Live Speaking</span><Waveform active color="#38bdf8" /></>
+                <><span className="text-emerald-400 font-medium">● 3.1 Live Speaking ({LANG_LABELS[lang]})</span><Waveform active color="#34d399" /></>
               ) : live.isThinking ? (
-                <span className="text-violet-300 animate-pulse font-medium">● 3.6 Flash reasoning...</span>
+                <span className="text-violet-300 animate-pulse font-medium">
+                  ● {selectedModel === 'gemini-3.6-flash' ? '3.6 Flash' : selectedModel === 'gemini-3.5-flash' ? '3.5 Flash' : '3.1 Live'} reasoning…
+                </span>
               ) : (
-                <span className="text-slate-400">🎙️ 3.1 Live · 💬 3.6 Flash</span>
+                <span className="text-slate-400 font-mono">
+                  {selectedModel === 'gemini-3.6-flash' ? '🧠 3.6 Flash' : selectedModel === 'gemini-3.5-flash' ? '⚡ 3.5 Flash' : '🎙️ 3.1 Live'} · {LANG_LABELS[lang]}
+                </span>
               )}
             </div>
           </div>
@@ -304,6 +476,35 @@ export const VoiceTextWidget = () => {
           >
             <ChevronDown className="w-4 h-4" />
           </button>
+        </div>
+      </div>
+
+      {/* 3 Gemini Models Selection Bar */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#080d1a] border-b border-slate-800 text-[10px]">
+        <div className="flex items-center gap-1.5 text-slate-400">
+          <Sparkles className="w-3 h-3 text-sky-400" />
+          <span className="font-semibold text-slate-300">Gemini Model:</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {[
+            { id: 'gemini-3.6-flash', label: '🧠 3.6 Flash' },
+            { id: 'gemini-3.5-flash', label: '⚡ 3.5 Flash' },
+            { id: 'gemini-3.1-flash-lite', label: '🎙️ 3.1 Live' },
+          ].map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setSelectedModel(m.id)}
+              className={`px-2 py-0.5 rounded font-mono text-[10px] transition-all ${
+                selectedModel === m.id
+                  ? 'bg-sky-600/30 text-sky-300 border border-sky-500/50 font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 border border-transparent hover:bg-slate-800/60'
+              }`}
+              title={`Switch active Gemini model to ${m.label}`}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -403,7 +604,12 @@ export const VoiceTextWidget = () => {
               ].map((s) => (
                 <button
                   key={s}
-                  onClick={() => { live.sendText(s, lang, { speak: !muted }); }}
+                  onClick={() => {
+                    live.unlockAudio?.();
+                    const pillLang = /[\u0980-\u09FF]/.test(s) ? 'bn' : /[\u0900-\u097F]/.test(s) ? 'hi' : lang;
+                    if (pillLang !== lang) setLang(pillLang);
+                    live.sendText(s, pillLang, { speak: !muted, model: selectedModel });
+                  }}
                   className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
                 >
                   {s}
@@ -440,21 +646,47 @@ export const VoiceTextWidget = () => {
           <button
             type="button"
             onClick={toggleMic}
-            className={`p-2 rounded-lg transition-all ${isCurrentlyListening
-                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110'
+            className={`p-2 rounded-lg transition-all ${continuousVoiceActive
+                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110 animate-pulse ring-2 ring-rose-400/50'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
               }`}
-            title={isCurrentlyListening ? 'Stop recording & send' : 'Start voice input'}
+            title={continuousVoiceActive ? 'Stop continuous conversation' : 'Start hands-free live conversation'}
             disabled={live.isConnecting}
           >
-            {isCurrentlyListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {continuousVoiceActive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </button>
         </form>
 
-        {isCurrentlyListening && (
-          <div className="mt-2 flex items-center justify-center gap-2 text-xs text-emerald-400">
-            <Waveform active color="#34d399" />
-            <span>Listening in {LANG_LABELS[lang] || 'English'} — tap mic to finish & send</span>
+        {continuousVoiceActive && (
+          <div className="mt-2.5 px-3 py-2 rounded-xl bg-gradient-to-r from-sky-950/80 to-violet-950/80 border border-sky-500/40 flex items-center justify-between gap-2 text-xs text-sky-200 animate-fadeIn shadow-md">
+            <div className="flex items-center gap-2 truncate">
+              <Waveform active color={live.isSpeaking ? '#34d399' : '#38bdf8'} />
+              <span className="truncate text-[11px] font-medium">
+                {live.isSpeaking ? (
+                  <span className="text-emerald-300">CycloneAI speaking aloud…</span>
+                ) : live.isThinking ? (
+                  <span className="text-violet-300 animate-pulse">Thinking…</span>
+                ) : (
+                  <span className="text-sky-300">
+                    {lang === 'bn'
+                      ? '🎙️ সাইক্লোনএআই শুনছে... বলুন'
+                      : lang === 'hi'
+                      ? '🎙️ सुन रहा हूँ... बोलिए'
+                      : '🎙️ Live Voice — speak anytime, auto-replies'}
+                  </span>
+                )}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                live.unlockAudio?.();
+                finishVoiceAndAnswer();
+              }}
+              className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-600 hover:bg-sky-500 text-white shrink-0 shadow transition-colors"
+            >
+              {lang === 'bn' ? 'উত্তর নিন ⏎' : lang === 'hi' ? 'उत्तर लें ⏎' : 'Answer ⏎'}
+            </button>
           </div>
         )}
       </div>

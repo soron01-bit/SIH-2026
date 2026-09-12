@@ -46,9 +46,9 @@ function loadDotEnv() {
 }
 loadDotEnv();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 const VOICE_MODEL = process.env.GEMINI_VOICE_MODEL || 'gemini-3.1-flash-live-preview';
-const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash';
+const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash-lite';
 
 const SYSTEM_INSTRUCTION = `You are CycloneAI, an intelligent voice and text assistant for the Cyclone Intelligence Dashboard.
 You understand and converse fluently in English, Hindi (हिन्दी), and Bengali (বাংলা).
@@ -56,25 +56,234 @@ Respond in the language the user speaks or writes in.
 You have expert knowledge of tropical cyclone tracking, Dvorak classification (CI 1.0 to 8.0), Rapid Intensification (RI), eyewall symmetry, central dense overcast (CDO), and IMD / JTWC alert bulletins.
 Keep spoken and text answers concise, clear, and actionable.`;
 
+/**
+ * Convert 24kHz 16-bit Mono PCM buffer to valid RIFF WAV audio
+ */
+export function pcmToWav(pcmBuffer, sampleRate = 24000, channels = 1, bitDepth = 16) {
+  const byteRate = (sampleRate * channels * bitDepth) / 8;
+  const blockAlign = (channels * bitDepth) / 8;
+  const dataSize = pcmBuffer.length;
+  const header = Buffer.alloc(44);
+
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16); // Subchunk1Size for PCM
+  header.writeUInt16LE(1, 20);  // AudioFormat 1 = PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitDepth, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([header, pcmBuffer]);
+}
+
+/**
+ * Synthesize speech using Google Gemini's native Audio generation model
+ * with official Female Voice 'Aoede' (supports Bengali, Hindi, English)
+ */
+export async function generateGeminiSpeechWav(text, apiKey) {
+  if (!apiKey || !text) return null;
+  const ttsModels = ['gemini-2.5-flash-preview-tts', 'gemini-3.1-flash-tts-preview'];
+  for (const m of ttsModels) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: 'Aoede', // Official Gemini Female Voice
+                },
+              },
+            },
+          },
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const b64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (b64) {
+          const pcmBuf = Buffer.from(b64, 'base64');
+          return pcmToWav(pcmBuf, 24000, 1, 16);
+        }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.warn(`[vite-voice] Gemini TTS ${m} returned ${res.status}:`, errJson?.error?.message);
+      }
+    } catch (e) {
+      console.warn(`[vite-voice] Gemini TTS fetch failed on ${m}:`, e.message);
+    }
+  }
+  return null;
+}
+
+/**
+ * Detect language from text content with fallback
+ */
+export function detectUserLanguage(text = '', preferred = 'auto') {
+  const str = (text || '').trim();
+  if (!str) return (preferred && preferred !== 'auto') ? preferred : 'en';
+
+  if (/[\u0980-\u09FF]/.test(str)) return 'bn';
+  if (/[\u0900-\u097F]/.test(str)) return 'hi';
+
+  // Authentic Banglish keywords
+  if (/\b(kothay|ache|jhor|hobe|ekhon|amader|ekhane|brishti|kemon|landfall|bhalo|khobor|naam|shohor|sahajjo|ami|tumi|apni|kichu|bolchen|bolun|bujhte|parchi|shunun|dhoron)\b/i.test(str)) {
+    return 'bn';
+  }
+
+  // Authentic Hinglish keywords
+  if (/\b(kahan|kaha|hai|hoga|khatra|hawa|surakshit|aandhi|toofan|madad|batao|kya|kaise|sunao|namaste|shukriya|bachav|kitna|dur)\b/i.test(str)) {
+    return 'hi';
+  }
+
+  // English keywords or Latin script
+  if (/\b(what|where|how|is|are|the|cyclone|storm|wind|speed|distance|safe|safety|alert|advisory|track|weather|status|rain|landfall|shelter|hello|hi|help|will|can)\b/i.test(str)) {
+    return 'en';
+  }
+
+  if (/^[a-zA-Z0-9\s.,?!'"\-:;()]+$/.test(str)) {
+    return 'en';
+  }
+
+  return (preferred && preferred !== 'auto') ? preferred : 'en';
+}
+
 export async function handleTextChat(body) {
-  const { message, history = [], language = 'en', userLocation } = body;
+  const { message = '', audio = null, history = [], language = 'auto', userLocation, model: requestedModel, textHint = '' } = body;
+
+  const apiKey = GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
 
   let locationContext = '';
   if (userLocation) {
     locationContext = `
-CURRENT USER LOCATION & CYCLONE TELEMETRY:
-- User Station: ${userLocation.city || 'Coastal City'}, ${userLocation.state || 'India'} (${userLocation.latitude}°N, ${userLocation.longitude}°E)
-- Active Storm: ${userLocation.activeCycloneName || 'Cyclone Dana'}
-- Distance to Storm Eye: ${userLocation.distanceKm != null ? `${userLocation.distanceKm} km` : 'Measuring'}
+USER REAL-TIME LOCATION & CYCLONE METRICS:
+- Station City: ${userLocation.city || 'Coastal Region'}, ${userLocation.state || 'India'} (${userLocation.latitude}°N, ${userLocation.longitude}°E)
+- Monitored Cyclone: ${userLocation.activeCycloneName || 'Cyclone Dana'}
+- Distance to Storm Eye: ${userLocation.distanceKm != null ? `${userLocation.distanceKm} km` : 'Measuring proximity'}
 - Bearing to Storm: ${userLocation.bearingFromUser || 'East'}
 - Localized Risk Level: ${userLocation.riskLevel || 'MONITORING'}
-- Localized IMD Advisory: ${userLocation.advisory || 'Standard coastal vigilance'}
+- Localized Advisory: ${userLocation.advisory || 'Coastal vigilance recommended'}`;
+  }
 
-LOCATION GUIDANCE:
-1. Always take the user's location (${userLocation.city || 'their area'}) into account.
-2. If the user asks "Am I safe?", "Will it hit my area?", "How far is the cyclone?", or questions in Bengali ("আমার শহরে কি ঝড় হবে?"), Hindi ("क्या मेरे शहर में ख़तरा है?"), or English:
-   - State their city (${userLocation.city}) and the exact distance (${userLocation.distanceKm} km) and risk category (${userLocation.riskLevel}).
-   - Provide clear, reassuring, safety-first guidance tailored to their distance and language.`;
+  // ── 1. Handle Voice Audio Input (Direct Gemini Multimodal Audio Understanding) ──
+  if (audio && apiKey) {
+    const audioModelsToTry = [
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+      requestedModel,
+      'gemini-3.5-flash',
+      'gemini-3.6-flash',
+      'gemini-2.5-flash',
+    ].filter(Boolean);
+
+    const hintClause = textHint ? `\n(Speech recognition transcription hint: "${textHint}")` : '';
+
+    const audioPrompt = `You are CycloneAI, an expert conversational meteorological voice agent for the Cyclone Intelligence Dashboard.
+Listen carefully to the user's spoken audio.${hintClause}
+${locationContext}
+
+CRITICAL LANGUAGE MIRRORING RULES:
+1. DETECT THE USER'S SPOKEN LANGUAGE WITH 100% ACCURACY:
+   - English: If the user speaks English -> "detectedLanguage": "en", formulate "userText" in English, formulate "reply" 100% in natural, fluent English.
+   - Bengali (বাংলা or Banglish): If the user speaks Bengali -> "detectedLanguage": "bn", formulate "userText" in authentic Bengali script (বাংলা), formulate "reply" 100% in natural, fluent Bengali (বাংলা লিপিতে).
+   - Hindi (हिन्दी or Hinglish): If the user speaks Hindi -> "detectedLanguage": "hi", formulate "userText" in authentic Hindi script (हिन्दी), formulate "reply" 100% in natural, fluent Hindi (हिन्दी लिपि में).
+2. YOUR REPLY LANGUAGE MUST MATCH THE USER'S SPOKEN LANGUAGE EXACTLY. NEVER respond in a different language than the user spoke.
+3. Keep spoken replies concise (2 to 3 sentences max) so they sound lively and engaging when spoken by the voice agent.
+4. NEVER repeat canned or identical static sentences! Every turn must be fresh, dynamic, and directly address the user's specific words, query, or question.
+5. If the audio is an initial greeting or test audio, introduce yourself warmly as CycloneAI in the user's language and ask how you can help track the storm.
+
+Respond strictly in valid JSON format:
+{
+  "detectedLanguage": "en" | "bn" | "hi",
+  "userText": "accurate transcription in the speaker's language",
+  "reply": "expert, conversational response answering the user in the EXACT SAME language they spoke"
+}`;
+
+    for (const model of audioModelsToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: 'audio/wav', data: audio } },
+                { text: audioPrompt },
+              ],
+            }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.8,
+            },
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const raw = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              let detLang = parsed.detectedLanguage;
+              const hasBnReply = /[\u0980-\u09FF]/.test(parsed.reply || '');
+              const hasHiReply = /[\u0900-\u097F]/.test(parsed.reply || '');
+              if (!detLang || !['en', 'bn', 'hi'].includes(detLang)) {
+                detLang = hasBnReply ? 'bn' : hasHiReply ? 'hi' : 'en';
+              }
+              return {
+                userText: parsed.userText || textHint || 'Voice Query',
+                reply: parsed.reply || raw,
+                modelUsed: model,
+                detectedLanguage: detLang,
+              };
+            } catch {
+              const hasBn = /[\u0980-\u09FF]/.test(raw);
+              const hasHi = /[\u0900-\u097F]/.test(raw);
+              return {
+                userText: textHint || 'Voice Query',
+                reply: raw,
+                modelUsed: model,
+                detectedLanguage: hasBn ? 'bn' : hasHi ? 'hi' : 'en',
+              };
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`[vite-voice] Audio processing error on ${model}:`, e.message);
+      }
+    }
+  }
+
+  // ── 2. Handle Text Input (Direct Gemini Reasoning) ──
+  const effectiveLang = detectUserLanguage(message || textHint, language);
+
+  let langInstruction = '';
+  if (effectiveLang === 'bn') {
+    langInstruction = `
+CRITICAL REQUIREMENT: The user communicated in BENGALI (বাংলা / Banglish).
+You MUST formulate your entire response 100% in natural, fluent, colloquial BENGALI (বাংলা লিপিতে).
+Never give generic canned answers or repeat identical sentences. Intelligently, directly, and uniquely answer their exact query. Keep spoken and text answers concise under 3 sentences.`;
+  } else if (effectiveLang === 'hi') {
+    langInstruction = `
+CRITICAL REQUIREMENT: The user communicated in HINDI (हिन्दी / Hinglish).
+You MUST formulate your entire response 100% in natural, fluent HINDI (हिन्दी script). Keep under 3 sentences.`;
+  } else {
+    langInstruction = `
+CRITICAL REQUIREMENT: The user communicated in ENGLISH.
+You MUST formulate your entire response 100% in natural, fluent ENGLISH. Keep spoken and text answers concise under 3 sentences.`;
   }
 
   const contents = [];
@@ -84,12 +293,17 @@ LOCATION GUIDANCE:
       parts: [{ text: turn.text }],
     });
   }
-  contents.push({
-    role: 'user',
-    parts: [{ text: message }],
-  });
+  if (message) {
+    contents.push({
+      role: 'user',
+      parts: [{ text: message }],
+    });
+  }
 
-  const fullInstruction = `${SYSTEM_INSTRUCTION}\n${locationContext}\nUser language: ${language}.`;
+  const fullInstruction = `You are CycloneAI, an expert conversational meteorologist assistant for the Cyclone Intelligence Dashboard.
+You understand and converse fluently in everyday Bengali (বাংলা), Hindi (हिन्दी), and English.
+${locationContext}
+${langInstruction}`;
 
   const payload = {
     contents,
@@ -97,24 +311,24 @@ LOCATION GUIDANCE:
       parts: [{ text: fullInstruction }],
     },
     generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 500,
+      temperature: 0.8,
+      maxOutputTokens: 400,
     },
   };
 
   const modelsToTry = [
-    TEXT_MODEL,
-    'gemini-3.5-flash',
+    requestedModel,
     'gemini-3.1-flash-lite',
     'gemini-flash-latest',
-    'gemini-3.7-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
     'gemini-2.5-flash',
-  ];
+  ].filter(Boolean);
 
-  if (GEMINI_API_KEY) {
+  if (apiKey) {
     for (const model of modelsToTry) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -122,21 +336,25 @@ LOCATION GUIDANCE:
         });
 
         if (response.status === 503 || response.status === 429) {
-          console.warn(`[vite-voice] ${model} HTTP ${response.status} (quota or busy), trying next model...`);
           continue;
         }
 
         const json = await response.json();
         if (json.error) {
-          console.warn(`[vite-voice] ${model} API error:`, json.error.message);
           continue;
         }
 
         const replyText = json.candidates?.[0]?.content?.parts?.[0]?.text;
         if (replyText) {
+          const finalReplyLang = /[\u0980-\u09FF]/.test(replyText)
+            ? 'bn'
+            : /[\u0900-\u097F]/.test(replyText)
+            ? 'hi'
+            : effectiveLang;
           return {
             reply: replyText,
             modelUsed: model,
+            detectedLanguage: finalReplyLang,
           };
         }
       } catch (err) {
@@ -145,23 +363,20 @@ LOCATION GUIDANCE:
     }
   }
 
-  // Telemetry fallback if external APIs are busy
-  const city = userLocation?.city || 'your coastal station';
-  const storm = userLocation?.activeCycloneName || 'Cyclone Dana';
-  const dist = userLocation?.distanceKm != null ? `${userLocation.distanceKm} km` : 'active monitoring zone';
-  const risk = userLocation?.riskLevel || 'MODERATE';
-  const adv = userLocation?.advisory || 'Please stay alert to official IMD bulletins and coastal radar updates.';
-
-  let fallbackReply = `According to latest Doppler radar telemetry, you are located in ${city}, approximately ${dist} from ${storm}. Your localized risk level is ${risk}. ${adv}`;
-  if (language === 'bn') {
-    fallbackReply = `সরাসরি রাডার টেলিমেট্রি অনুযায়ী, আপনি ${city}-তে অবস্থান করছেন, যা ${storm}-এর কেন্দ্র থেকে প্রায় ${dist} দূরে। আপনার এলাকার ঝুঁকির মাত্রা: ${risk}। ${adv}`;
-  } else if (language === 'hi') {
-    fallbackReply = `लाइव रडार टेलीमेट्री के अनुसार, आप ${city} में हैं, जो ${storm} से लगभग ${dist} दूर है। आपके क्षेत्र का जोखिम स्तर: ${risk} है। ${adv}`;
+  // Situational fallback only if device is totally offline
+  const city = userLocation?.city || (effectiveLang === 'bn' ? 'আপনার এলাকা' : effectiveLang === 'hi' ? 'आपका क्षेत्र' : 'your area');
+  const storm = userLocation?.activeCycloneName || (effectiveLang === 'bn' ? 'ঘূর্ণিঝড়' : effectiveLang === 'hi' ? 'चक्रवात' : 'the storm');
+  let fallbackReply = `Live tracking for ${storm} is active. Coastal vigilance is advised in ${city}.`;
+  if (effectiveLang === 'bn') {
+    fallbackReply = `বর্তমানে ${storm}-এর লাইভ ট্র্যাকিং এবং স্যাটেলাইট ডেটা বিশ্লেষণ করা হচ্ছে। ${city} ও উপকূলীয় অঞ্চলে সতর্ক থাকার অনুরোধ করা হচ্ছে।`;
+  } else if (effectiveLang === 'hi') {
+    fallbackReply = `वर्तमान में ${storm} की लाइव ट्रैकिंग और उपग्रह डेटा विश्लेषण सक्रिय है। ${city} और तटीय क्षेत्रों में सतर्क रहने की सलाह दी जाती है।`;
   }
 
   return {
     reply: fallbackReply,
     modelUsed: 'cyclone-ai-telemetry-engine',
+    detectedLanguage: effectiveLang,
   };
 }
 
@@ -176,11 +391,15 @@ export function cycloneVoicePlugin() {
       // ── Connect HTTP Middleware ───────────────────────────────────────────
       server.middlewares.use(async (req, res, next) => {
         const url = req.url || '';
-        if (!url.startsWith('/voice')) {
+        if (!url.startsWith('/voice') && !url.startsWith('/api/voice')) {
           return next();
         }
 
-        const pathOnly = url.split('?')[0];
+        // Normalize /api/voice/* -> /voice/* to catch frontend requests seamlessly
+        let pathOnly = url.split('?')[0];
+        if (pathOnly.startsWith('/api/voice')) {
+          pathOnly = pathOnly.replace('/api/voice', '/voice');
+        }
 
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -212,6 +431,90 @@ export function cycloneVoicePlugin() {
             voiceModel: VOICE_MODEL,
             textModel: TEXT_MODEL,
           }));
+        }
+
+        // TTS audio endpoint (streams native Gemini Aoede female speech in Bengali, Hindi, English)
+        if (req.method === 'GET' && pathOnly === '/voice/tts') {
+          try {
+            const host = req.headers.host || 'localhost:5173';
+            const urlObj = new URL(req.url, `http://${host}`);
+            const text = urlObj.searchParams.get('text') || '';
+            const targetLang = (urlObj.searchParams.get('lang') || 'en').toLowerCase();
+            const hasBengali = /[\u0980-\u09FF]/.test(text);
+            const hasHindi = /[\u0900-\u097F]/.test(text);
+            const tl = hasBengali ? 'bn' : hasHindi ? 'hi' : targetLang.startsWith('bn') ? 'bn' : targetLang.startsWith('hi') ? 'hi' : 'en';
+
+            const cleanText = text
+              .replace(/[*#_~`]/g, '')
+              .replace(/https?:\/\/\S+/g, '')
+              .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+              .trim()
+              .slice(0, 600);
+
+            if (!cleanText) {
+              res.statusCode = 400;
+              return res.end('Missing text');
+            }
+
+            // PRIMARY: Real Google Gemini Official Female Voice ('Aoede')
+            const apiKey = GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+            const geminiWav = await generateGeminiSpeechWav(cleanText, apiKey);
+            if (geminiWav) {
+              res.setHeader('Content-Type', 'audio/wav');
+              res.setHeader('Content-Length', geminiWav.length);
+              res.setHeader('Cache-Control', 'public, max-age=86400');
+              res.setHeader('X-Voice-Model', 'gemini-aoede-female');
+              return res.end(geminiWav);
+            }
+
+            // SECONDARY FALLBACK: Google TTS MP3 chunks if Gemini API is unreachable
+            const chunks = [];
+            let rem = cleanText;
+            while (rem.length > 0) {
+              if (rem.length <= 180) {
+                chunks.push(rem);
+                break;
+              }
+              let cut = -1;
+              const slice = rem.slice(0, 180);
+              const puncts = ['।', '?', '!', '.', ',\n', ',', ' '];
+              for (const p of puncts) {
+                const idx = slice.lastIndexOf(p);
+                if (idx > 30) {
+                  cut = idx + 1;
+                  break;
+                }
+              }
+              if (cut <= 0) cut = 180;
+              chunks.push(rem.slice(0, cut).trim());
+              rem = rem.slice(cut).trim();
+            }
+
+            const audioBuffers = [];
+            for (const chunk of chunks.filter(Boolean)) {
+              const ttsGoogleUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${tl}&client=tw-ob&q=${encodeURIComponent(chunk)}`;
+              const ttsRes = await fetch(ttsGoogleUrl, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
+              });
+              if (ttsRes.ok) {
+                audioBuffers.push(Buffer.from(await ttsRes.arrayBuffer()));
+              }
+            }
+
+            if (audioBuffers.length > 0) {
+              const combinedBuffer = Buffer.concat(audioBuffers);
+              res.setHeader('Content-Type', 'audio/mpeg');
+              res.setHeader('Content-Length', combinedBuffer.length);
+              res.setHeader('Cache-Control', 'public, max-age=86400');
+              return res.end(combinedBuffer);
+            }
+          } catch (e) {
+            console.warn('[vite-voice] TTS error:', e.message);
+          }
+          res.statusCode = 502;
+          return res.end('TTS unavailable');
         }
 
         // Text Chat endpoint

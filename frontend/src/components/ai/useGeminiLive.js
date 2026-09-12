@@ -170,7 +170,7 @@ export function useGeminiLive({
   userLocation = null,
   activeCyclone = null,
   voiceModel = 'gemini-3.1-flash-live-preview',
-  textModel = 'gemini-2.5-flash',
+  textModel = 'gemini-3.6-flash',
 } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -189,6 +189,8 @@ export function useGeminiLive({
   const playbackQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
   const sessionReadyRef = useRef(false);
+  const activeAudioRef = useRef(null);
+  const activeAudioSourceRef = useRef(null);
 
   // ── Append to transcript ─────────────────────────────────────────────────
   const addMessage = useCallback((role, text, lang = 'en') => {
@@ -198,94 +200,303 @@ export function useGeminiLive({
     ]);
   }, []);
 
-  // ── Web Speech Synthesis (Text-to-Speech) ─────────────────────────────────
-  const speakText = useCallback((text, lang = 'en', onSpeechEnd = null) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      onSpeechEnd?.();
-      return;
-    }
-    try {
-      window.speechSynthesis.cancel();
-      try { window.speechSynthesis.resume(); } catch {}
-
-      // Strip markdown bold, italics, bullets, headers, links
-      const clean = (text || '')
-        .replace(/[*#_~`]/g, '')
-        .replace(/https?:\/\/\S+/g, '')
-        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-        .trim();
-      if (!clean) {
-        onSpeechEnd?.();
-        return;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      if (lang === 'bn') {
-        utterance.lang = 'bn-IN';
-      } else if (lang === 'hi') {
-        utterance.lang = 'hi-IN';
-      } else {
-        utterance.lang = 'en-US';
-      }
-
-      const voices = window.speechSynthesis.getVoices?.() || [];
-      const targetLang = lang === 'bn' ? 'bn' : lang === 'hi' ? 'hi' : 'en';
-      const matched = voices.find((v) => v.lang.toLowerCase().startsWith(targetLang));
-      if (matched) utterance.voice = matched;
-
-      let ended = false;
-      const handleDone = () => {
-        if (ended) return;
-        ended = true;
-        setIsSpeaking(false);
-        onSpeechEnd?.();
-      };
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = handleDone;
-      utterance.onerror = (e) => {
-        console.warn('SpeechSynthesis error:', e);
-        handleDone();
-      };
-
-      setTimeout(() => {
-        try {
-          window.speechSynthesis.resume();
-          window.speechSynthesis.speak(utterance);
-        } catch (err) {
-          console.warn('Speak error:', err);
-          handleDone();
-        }
-      }, 40);
-    } catch (e) {
-      console.warn('Speech synthesis note:', e);
-      setIsSpeaking(false);
-      onSpeechEnd?.();
-    }
-  }, []);
-
   const stopSpeech = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      try { window.speechSynthesis.cancel(); } catch {}
+      try { window.speechSynthesis.cancel(); } catch { }
     }
     setIsSpeaking(false);
+  }, []);
+
+  // ── Unlock AudioContext during user interaction (gesture) ────────────────
+  const unlockAudio = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!audioCtxRef.current && AudioCtx) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      if (!activeAudioRef.current && typeof Audio !== 'undefined') {
+        activeAudioRef.current = new Audio();
+      }
+    } catch { }
   }, []);
 
   // ── Stop all audio (TTS and Web Audio) ─────────────────────────────────────
   const stopAudio = useCallback(() => {
+    if (activeAudioRef.current) {
+      try {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.currentTime = 0;
+      } catch { }
+    }
+    if (activeAudioSourceRef.current) {
+      try {
+        activeAudioSourceRef.current.stop();
+        activeAudioSourceRef.current.disconnect();
+      } catch { }
+      activeAudioSourceRef.current = null;
+    }
     stopSpeech();
     playbackQueueRef.current = [];
     isPlayingRef.current = false;
     setIsSpeaking(false);
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(() => {});
-      audioCtxRef.current = null;
-    }
   }, [stopSpeech]);
+
+  // ── Web Speech Synthesis & Native Indic TTS ──────────────────────────────
+  const speakText = useCallback((text, lang = 'en', onSpeechEnd = null) => {
+    stopAudio();
+
+    // Strip markdown bold, italics, bullets, headers, links
+    const clean = (text || '')
+      .replace(/[*#_~`]/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .trim();
+
+    if (!clean) {
+      onSpeechEnd?.();
+      return;
+    }
+
+    // Auto-detect Bengali or Hindi Unicode script directly from reply text
+    const hasBengali = /[\u0980-\u09FF]/.test(clean);
+    const hasHindi = /[\u0900-\u097F]/.test(clean);
+    const effectiveLang = hasBengali ? 'bn' : hasHindi ? 'hi' : (lang || 'en');
+    const isIndic = effectiveLang === 'bn' || effectiveLang === 'hi';
+
+    // Helper: Play via Web Audio API (decodeAudioData) as a guaranteed fallback
+    const playWithAudioContext = async (url) => {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) throw new Error('No AudioContext');
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        audioCtxRef.current = new AudioCtx();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      activeAudioSourceRef.current = source;
+
+      let ended = false;
+      const finish = () => {
+        if (ended) return;
+        ended = true;
+        activeAudioSourceRef.current = null;
+        setIsSpeaking(false);
+        onSpeechEnd?.();
+      };
+
+      source.onended = finish;
+      setIsSpeaking(true);
+      source.start(0);
+    };
+
+    // Direct client-side Google Gemini Audio TTS with official Female Voice 'Aoede'
+    const tryClientGeminiTTS = async () => {
+      const clientKey = import.meta.env?.VITE_GEMINI_API_KEY || '';
+      if (!clientKey) return false;
+      const ttsModels = ['gemini-2.5-flash-preview-tts', 'gemini-3.1-flash-tts-preview'];
+      for (const m of ttsModels) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${clientKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: clean }] }],
+              generationConfig: {
+                responseModalities: ['AUDIO'],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: 'Aoede' },
+                  },
+                },
+              },
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const b64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+            if (b64) {
+              const samples = base64PCMToFloat32(b64);
+              const AudioCtx = window.AudioContext || window.webkitAudioContext;
+              if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+                audioCtxRef.current = new AudioCtx();
+              }
+              const ctx = audioCtxRef.current;
+              if (ctx.state === 'suspended') await ctx.resume();
+              const buffer = ctx.createBuffer(1, samples.length, 24000);
+              buffer.copyToChannel(samples, 0);
+              const src = ctx.createBufferSource();
+              src.buffer = buffer;
+              src.connect(ctx.destination);
+              activeAudioSourceRef.current = src;
+              src.onended = () => {
+                activeAudioSourceRef.current = null;
+                setIsSpeaking(false);
+                onSpeechEnd?.();
+              };
+              setIsSpeaking(true);
+              src.start(0);
+              return true;
+            }
+          }
+        } catch (e) {
+          console.warn('[Voice] Client Gemini Aoede TTS fetch note:', e.message);
+        }
+      }
+      return false;
+    };
+
+    // Helper: Stream authentic Gemini Aoede audio via proxy endpoints
+    const playAudioStream = (candidateUrls, index = 0) => {
+      if (index >= candidateUrls.length) {
+        tryClientGeminiTTS().then((ok) => {
+          if (!ok) fallbackToSpeechSynthesis();
+        });
+        return;
+      }
+      const url = candidateUrls[index];
+      try {
+        let audio = activeAudioRef.current;
+        if (!audio) {
+          audio = new Audio();
+          activeAudioRef.current = audio;
+        }
+        audio.src = url;
+        audio.volume = 1.0;
+
+        let ended = false;
+        const cleanup = () => {
+          if (ended) return;
+          ended = true;
+          audio.onended = null;
+          audio.onerror = null;
+          audio.onplay = null;
+        };
+
+        audio.onplay = () => setIsSpeaking(true);
+        audio.onended = () => {
+          cleanup();
+          setIsSpeaking(false);
+          onSpeechEnd?.();
+        };
+        audio.onerror = () => {
+          cleanup();
+          // Fallback to Web Audio API decoding before moving to next candidate
+          playWithAudioContext(url).catch(() => {
+            playAudioStream(candidateUrls, index + 1);
+          });
+        };
+
+        const p = audio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch((err) => {
+            cleanup();
+            console.warn('[Voice] Audio element blocked, trying AudioContext:', err);
+            playWithAudioContext(url).catch(() => {
+              playAudioStream(candidateUrls, index + 1);
+            });
+          });
+        }
+      } catch {
+        playWithAudioContext(url).catch(() => {
+          playAudioStream(candidateUrls, index + 1);
+        });
+      }
+    };
+
+    const fallbackToSpeechSynthesis = () => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        onSpeechEnd?.();
+        return;
+      }
+      try {
+        window.speechSynthesis.cancel();
+        try { window.speechSynthesis.resume(); } catch { }
+
+        const utterance = new SpeechSynthesisUtterance(clean);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        if (effectiveLang === 'bn') {
+          utterance.lang = 'bn-IN';
+        } else if (effectiveLang === 'hi') {
+          utterance.lang = 'hi-IN';
+        } else {
+          utterance.lang = 'en-US';
+        }
+
+        const voices = window.speechSynthesis.getVoices?.() || [];
+        const targetLang = effectiveLang === 'bn' ? 'bn' : effectiveLang === 'hi' ? 'hi' : 'en';
+        const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(targetLang));
+        const candidatePool = langVoices.length > 0 ? langVoices : voices;
+
+        // Prioritize female voices (Zira, Jenny, Aria, Aoede, Kore, Google US/UK Female, Samantha, etc.)
+        const femaleKeywords = [
+          'zira', 'jenny', 'aria', 'aoede', 'kore', 'female', 'woman',
+          'samantha', 'victoria', 'karen', 'swara', 'swetha', 'kalpana',
+          'anjali', 'geeta', 'shruti', 'priya', 'natural', 'google'
+        ];
+        let matched = candidatePool.find((v) =>
+          femaleKeywords.some((kw) => v.name.toLowerCase().includes(kw))
+        );
+
+        if (!matched) {
+          const maleKeywords = ['david', 'mark', 'george', 'guy', 'male'];
+          matched = candidatePool.find((v) =>
+            !maleKeywords.some((kw) => v.name.toLowerCase().includes(kw))
+          );
+        }
+
+        if (matched) utterance.voice = matched;
+        utterance.pitch = 1.05;
+
+        let ended = false;
+        const handleDone = () => {
+          if (ended) return;
+          ended = true;
+          setIsSpeaking(false);
+          onSpeechEnd?.();
+        };
+
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = handleDone;
+        utterance.onerror = () => {
+          handleDone();
+        };
+
+        setTimeout(() => {
+          try {
+            window.speechSynthesis.resume();
+            window.speechSynthesis.speak(utterance);
+          } catch {
+            handleDone();
+          }
+        }, 40);
+      } catch {
+        setIsSpeaking(false);
+        onSpeechEnd?.();
+      }
+    };
+
+    // Always prioritize native Gemini Aoede Female Voice across all languages (bn, hi, en)
+    const candidates = [
+      `/voice/tts?lang=${effectiveLang}&text=${encodeURIComponent(clean)}`,
+      `/api/voice/tts?lang=${effectiveLang}&text=${encodeURIComponent(clean)}`,
+      `https://translate.google.com/translate_tts?ie=UTF-8&tl=${effectiveLang}&client=tw-ob&q=${encodeURIComponent(clean.slice(0, 200))}`,
+    ];
+    playAudioStream(candidates, 0);
+  }, [stopAudio]);
 
   // ── Audio playback queue for raw PCM (Local Gemini Live) ─────────────────
   const playNext = useCallback(() => {
@@ -445,7 +656,9 @@ export function useGeminiLive({
     stopAudio(); // barge-in
 
     const cleanText = text.trim();
-    addMessage('user', cleanText, lang);
+    if (!options.isVoice) {
+      addMessage('user', cleanText, lang);
+    }
     setIsThinking(true);
     setError(null);
 
@@ -470,6 +683,7 @@ export function useGeminiLive({
     const payload = {
       message: cleanText,
       language: lang,
+      model: options.model || textModel,
       userLocation: userLocation ? {
         city: userLocation.city,
         state: userLocation.state,
@@ -484,7 +698,8 @@ export function useGeminiLive({
       history: transcript.slice(-6).map((m) => ({ role: m.role, text: m.text })),
     };
 
-    const candidateEndpoints = ['/api/voice/chat', '/voice/chat'];
+    let finalDetectedLang = null;
+    const candidateEndpoints = ['/voice/chat', '/api/voice/chat'];
     for (const ep of candidateEndpoints) {
       try {
         const res = await fetch(ep, {
@@ -497,31 +712,55 @@ export function useGeminiLive({
           const data = await res.json();
           if (data && data.reply) {
             assistantReply = data.reply;
+            if (data.detectedLanguage) {
+              finalDetectedLang = data.detectedLanguage;
+            }
             break;
           }
         }
-      } catch {}
+      } catch { }
     }
 
-    // Direct Gemini client call if VITE_GEMINI_API_KEY is available and cloud endpoint didn't reply
+    // Direct Gemini client call using user API key cascading across the active Gemini Models
+    const hasBnText = /[\u0980-\u09FF]/.test(cleanText) ||
+      /\b(kothay|ache|jhor|hobe|ekhon|amader|ekhane|brishti|kemon|landfall|bhalo|khobor|naam|shohor|sahajjo)\b/i.test(cleanText);
+    const hasHiText = /[\u0900-\u097F]/.test(cleanText) ||
+      /\b(kahan|kaha|hai|hoga|khatra|hawa|surakshit|aandhi|toofan|madad|batao|kya|kaise)\b/i.test(cleanText);
+    const effectiveQueryLang = hasBnText ? 'bn' : hasHiText ? 'hi' : (lang && lang !== 'auto' ? lang : 'en');
+
     if (!assistantReply) {
-      const clientKey = import.meta.env?.VITE_GEMINI_API_KEY;
+      const clientKey = import.meta.env?.VITE_GEMINI_API_KEY || '';
       if (clientKey) {
-        try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${clientKey}`;
-          const gRes = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: cleanText }] }],
-            }),
-          });
-          if (gRes.ok) {
-            const gData = await gRes.json();
-            const rep = gData.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (rep) assistantReply = rep;
-          }
-        } catch {}
+        const clientModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', options.model, 'gemini-3.6-flash', 'gemini-3.5-flash'].filter(Boolean);
+        const langPrompt = effectiveQueryLang === 'bn'
+          ? 'CRITICAL REQUIREMENT: The user communicated in BENGALI. You MUST formulate your entire response in natural BENGALI (বাংলা script). Do NOT reply in English. Keep answer under 3 sentences.'
+          : effectiveQueryLang === 'hi'
+          ? 'CRITICAL REQUIREMENT: The user communicated in HINDI. You MUST formulate your entire response in natural HINDI (हिन्दी script). Do NOT reply in English. Keep answer under 3 sentences.'
+          : 'CRITICAL REQUIREMENT: The user communicated in ENGLISH. You MUST formulate your entire response in natural, fluent ENGLISH. Keep answer under 3 sentences.';
+
+        for (const model of clientModels) {
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${clientKey}`;
+            const gRes = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  role: 'user',
+                  parts: [{ text: `${langPrompt}\nUser question: ${cleanText}` }],
+                }],
+              }),
+            });
+            if (gRes.ok) {
+              const gData = await gRes.json();
+              const rep = gData.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (rep) {
+                assistantReply = rep;
+                break;
+              }
+            }
+          } catch { }
+        }
       }
     }
 
@@ -529,16 +768,24 @@ export function useGeminiLive({
     if (!assistantReply) {
       assistantReply = generateClientTelemetryReply({
         message: cleanText,
-        language: lang,
+        language: effectiveQueryLang,
         userLocation,
         activeCyclone,
       });
     }
 
-    addMessage('assistant', assistantReply, lang);
+    const isBengali = /[\u0980-\u09FF]/.test(assistantReply);
+    const isHindi = /[\u0900-\u097F]/.test(assistantReply);
+    const finalLang = isBengali ? 'bn' : isHindi ? 'hi' : (finalDetectedLang || effectiveQueryLang || 'en');
+
+    options.onLanguageDetected?.(finalLang);
+
+    if (!options.isVoice) {
+      addMessage('assistant', assistantReply, finalLang);
+    }
 
     if (options.speak) {
-      speakText(assistantReply, lang, options.onSpeechEnd);
+      speakText(assistantReply, finalLang, options.onSpeechEnd);
     } else {
       options.onSpeechEnd?.();
     }
@@ -547,21 +794,25 @@ export function useGeminiLive({
   }, [addMessage, stopAudio, transcript, toolHandlers, userLocation, activeCyclone, speakText]);
 
   // ── Send Audio Voice Turn (Multimodal audio) ──────────────────────────────
-  const sendAudioTurn = useCallback(async (audioBase64, lang = 'en', options = {}) => {
+  const sendAudioTurn = useCallback(async (audioBase64, lang = 'auto', options = {}) => {
     if (!audioBase64) return;
     stopAudio();
     setIsThinking(true);
     setError(null);
 
     const tempId = Date.now() + Math.random();
-    setTranscript((prev) => [
-      ...prev,
-      { id: tempId, role: 'user', text: '🎤 Listening…', lang, ts: new Date() },
-    ]);
+    if (!options.isVoice) {
+      setTranscript((prev) => [
+        ...prev,
+        { id: tempId, role: 'user', text: '🎤 Listening…', lang, ts: new Date() },
+      ]);
+    }
 
     const payload = {
       audio: audioBase64,
-      language: lang,
+      textHint: options.textHint || '',
+      language: lang || 'auto',
+      model: options.model || 'gemini-3.1-flash-lite',
       userLocation: userLocation ? {
         city: userLocation.city,
         state: userLocation.state,
@@ -578,8 +829,9 @@ export function useGeminiLive({
 
     let userTranscriptText = '🎤 Voice Query';
     let assistantReply = '';
+    let detectedLang = null;
 
-    const candidateEndpoints = ['/api/voice/chat', '/voice/chat'];
+    const candidateEndpoints = ['/voice/chat', '/api/voice/chat'];
     for (const ep of candidateEndpoints) {
       try {
         const res = await fetch(ep, {
@@ -593,31 +845,97 @@ export function useGeminiLive({
           if (data) {
             if (data.userText) userTranscriptText = data.userText;
             if (data.reply) assistantReply = data.reply;
+            if (data.detectedLanguage) detectedLang = data.detectedLanguage;
             break;
           }
         }
-      } catch {}
+      } catch { }
+    }
+
+    // Direct Gemini client multimodal fallback
+    if (!assistantReply) {
+      const clientKey = import.meta.env?.VITE_GEMINI_API_KEY || '';
+      if (clientKey) {
+        const clientAudioModels = ['gemini-3.1-flash-lite', 'gemini-flash-latest', options.model, 'gemini-3.5-flash', 'gemini-3.6-flash'].filter(Boolean);
+        const langPrompt = `You are CycloneAI, an expert conversational meteorological assistant.
+Listen carefully to the user's spoken voice audio.
+CRITICAL LANGUAGE MIRRORING RULES:
+1. Detect whether the user spoke in English, Bengali (বাংলা), or Hindi (हिन्दी).
+2. Formulate "userText" accurately in the user's language and script.
+3. Formulate "reply" strictly in the EXACT SAME language as the user.
+   - If English -> reply 100% in natural English.
+   - If Bengali -> reply 100% in natural Bengali (বাংলা লিপিতে).
+   - If Hindi -> reply 100% in natural Hindi (हिन्दी लिपि में).
+4. Never give canned, generic, or repeating replies. Keep response concise under 3 sentences.
+Output strictly in JSON: {"detectedLanguage": "en" | "bn" | "hi", "userText": "transcription", "reply": "expert response"}`;
+
+        for (const m of clientAudioModels) {
+          try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${clientKey}`;
+            const gRes = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  role: 'user',
+                  parts: [
+                    { inlineData: { mimeType: 'audio/wav', data: audioBase64 } },
+                    { text: langPrompt },
+                  ],
+                }],
+                generationConfig: {
+                  responseMimeType: 'application/json',
+                  temperature: 0.8,
+                },
+              }),
+            });
+            if (gRes.ok) {
+              const gData = await gRes.json();
+              const raw = gData.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (raw) {
+                try {
+                  const parsed = JSON.parse(raw);
+                  userTranscriptText = parsed.userText || options.textHint || 'Voice Query';
+                  assistantReply = parsed.reply || raw;
+                  if (parsed.detectedLanguage) detectedLang = parsed.detectedLanguage;
+                  break;
+                } catch {
+                  assistantReply = raw;
+                  break;
+                }
+              }
+            }
+          } catch { }
+        }
+      }
     }
 
     if (!assistantReply) {
       assistantReply = generateClientTelemetryReply({
-        message: 'voice query status',
-        language: lang,
+        message: options.textHint || 'voice query status',
+        language: detectedLang || lang || 'en',
         userLocation,
         activeCyclone,
       });
     }
 
-    // Replace temporary user message with recognized transcription
-    setTranscript((prev) =>
-      prev.map((m) => (m.id === tempId ? { ...m, text: `🎤 ${userTranscriptText}` } : m))
-    );
+    const isBengali = /[\u0980-\u09FF]/.test(assistantReply);
+    const isHindi = /[\u0900-\u097F]/.test(assistantReply);
+    const finalLang = isBengali ? 'bn' : isHindi ? 'hi' : (detectedLang || (lang !== 'auto' ? lang : 'en'));
 
-    // Add assistant response
-    addMessage('assistant', assistantReply, lang);
+    options.onLanguageDetected?.(finalLang);
+
+    if (!options.isVoice) {
+      // Replace temporary user message with recognized transcription
+      setTranscript((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, text: `🎤 ${userTranscriptText}` } : m))
+      );
+      // Add assistant response
+      addMessage('assistant', assistantReply, finalLang);
+    }
 
     if (options.speak !== false) {
-      speakText(assistantReply, lang, options.onSpeechEnd);
+      speakText(assistantReply, finalLang, options.onSpeechEnd);
     } else {
       options.onSpeechEnd?.();
     }
@@ -673,7 +991,7 @@ export function useGeminiLive({
       try {
         micProcessorRef.current.source?.disconnect();
         micProcessorRef.current.processor?.disconnect();
-      } catch {}
+      } catch { }
       micProcessorRef.current = null;
     }
 
@@ -685,7 +1003,7 @@ export function useGeminiLive({
 
     // Close mic context
     if (micAudioCtxRef.current) {
-      micAudioCtxRef.current.close().catch(() => {});
+      micAudioCtxRef.current.close().catch(() => { });
       micAudioCtxRef.current = null;
     }
 
@@ -738,6 +1056,7 @@ export function useGeminiLive({
     stopMic,
     speakText,
     stopAudio,
+    unlockAudio,
     clearTranscript: () => setTranscript([]),
   };
 }

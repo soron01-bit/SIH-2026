@@ -171,14 +171,18 @@ export const VoiceTextWidget = () => {
 
   const isCurrentlyListening = live.isListening || speechListening;
 
-  const toggleMic = () => {
+  const toggleMic = async () => {
     if (isCurrentlyListening) {
       stopSpeechRec();
-      live.stopMic();
+      const audioBase64 = await live.stopMic();
       if (inputText.trim()) {
         const textToSend = inputText.trim();
         setInputText('');
         live.sendText(textToSend, lang, { speak: !muted });
+      } else if (audioBase64) {
+        live.sendAudioTurn(audioBase64, lang, { speak: !muted });
+      } else {
+        live.sendText('Current status of ' + (detectedCyclone?.name || 'cyclone'), lang, { speak: !muted });
       }
     } else {
       live.stopAudio();

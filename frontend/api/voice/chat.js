@@ -1,5 +1,6 @@
 /**
  * Vercel Serverless Function: /api/voice/chat (within frontend root)
+ * Handles text and transcribed voice queries for CycloneAI Assistant.
  */
 
 const SYSTEM_INSTRUCTION = `You are CycloneAI, an intelligent voice and text assistant for the Cyclone Intelligence Dashboard.
@@ -15,7 +16,7 @@ function buildFallbackResponse({ message = '', language = 'en', userLocation }) 
   const risk = userLocation?.riskLevel || 'MODERATE';
   const adv = userLocation?.advisory || 'Please maintain vigilance and monitor official IMD bulletins and coastal radar updates.';
 
-  const lower = message.toLowerCase();
+  const lower = (message || '').toLowerCase();
 
   // Safety / distance questions
   if (lower.includes('safe') || lower.includes('सुरक्षित') || lower.includes('নিরাপদ') || lower.includes('distance') || lower.includes('दूरी') || lower.includes('দূরত্ব') || lower.includes('am i') || lower.includes('city') || lower.includes('শহর') || lower.includes('शहर')) {
@@ -75,7 +76,7 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== 'POST') {
-    return res.status(200).json({ ok: true, message: 'CycloneAI Voice/Text Chat Gateway active. Send POST with message.' });
+    return res.status(200).json({ ok: true, message: 'CycloneAI Voice/Text Chat Gateway active. Send POST with message or audio.' });
   }
 
   try {
@@ -89,15 +90,14 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    const { message = '', history = [], language = 'en', userLocation } = body;
+    const { message = '', audio = null, history = [], language = 'en', userLocation } = body;
     const cleanMessage = (message || '').trim();
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 
-    if (apiKey && cleanMessage) {
-      let locationContext = '';
-      if (userLocation) {
-        locationContext = `
+    let locationContext = '';
+    if (userLocation) {
+      locationContext = `
 CURRENT USER LOCATION & CYCLONE TELEMETRY:
 - User Station: ${userLocation.city || 'Coastal Station'}, ${userLocation.state || 'India'} (${userLocation.latitude || 22.57}°N, ${userLocation.longitude || 88.36}°E)
 - Active Storm: ${userLocation.activeCycloneName || 'Cyclone Dana'}
@@ -111,8 +111,80 @@ LOCATION GUIDANCE:
 2. If the user asks about safety, distance, or storm impact in English, Hindi (हिन्दी), or Bengali (বাংলা):
    - State their city (${userLocation.city}), exact distance (${userLocation.distanceKm} km), and risk category (${userLocation.riskLevel}).
    - Provide clear, reassuring, safety-first guidance tailored to their distance and language.`;
+    }
+
+    // ── CASE 1: Audio Input (Voice Mode) ───────────────────────────────────
+    if (audio) {
+      if (apiKey) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+          const prompt = `${SYSTEM_INSTRUCTION}
+${locationContext}
+Listen carefully to the user's spoken audio. It may be in English, Hindi (हिन्दी), or Bengali (বাংলা).
+Respond in valid JSON format:
+{
+  "userText": "transcription of what the user said in their spoken language",
+  "reply": "concise, expert response to their question in their spoken language (under 3 sentences)"
+}`;
+
+          const geminiRes = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                role: 'user',
+                parts: [
+                  { inlineData: { mimeType: 'audio/wav', data: audio } },
+                  { text: prompt }
+                ]
+              }],
+              generationConfig: {
+                responseMimeType: 'application/json'
+              }
+            }),
+          });
+
+          if (geminiRes.ok) {
+            const data = await geminiRes.json();
+            const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawText) {
+              try {
+                const parsed = JSON.parse(rawText);
+                return res.status(200).json({
+                  userText: parsed.userText || 'Voice Query',
+                  reply: parsed.reply || rawText,
+                  modelUsed: 'gemini-2.5-flash-audio',
+                });
+              } catch {
+                return res.status(200).json({
+                  userText: 'Voice Query',
+                  reply: rawText,
+                  modelUsed: 'gemini-2.5-flash-audio',
+                });
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[Vercel API] Audio fetch failed:', err.message);
+        }
       }
 
+      // Audio fallback when no API key or Gemini failed
+      const fallbackReply = buildFallbackResponse({
+        message: 'voice query status',
+        language,
+        userLocation,
+      });
+
+      return res.status(200).json({
+        userText: language === 'bn' ? 'ভয়েস প্রশ্ন' : language === 'hi' ? 'वॉयस प्रश्न' : 'Voice Query',
+        reply: fallbackReply,
+        modelUsed: 'cyclone-ai-telemetry-engine',
+      });
+    }
+
+    // ── CASE 2: Text Message ───────────────────────────────────────────────
+    if (apiKey && cleanMessage) {
       const contents = [];
       for (const turn of history.slice(-6)) {
         contents.push({

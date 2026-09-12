@@ -2,7 +2,8 @@
  * useGeminiLive.js
  *
  * Unified React hook for CycloneAI Assistant:
- *   - Voice Input : Browser SpeechRecognition (multi-lingual) + WebSocket PCM fallback
+ *   - Voice Input : Universal 16kHz WAV Audio Recording (works in Brave, Chrome, Edge, Safari)
+ *                   + Browser SpeechRecognition fallback
  *   - Voice Output: Web Speech Synthesis (TTS in EN, HI, BN) + Gemini Live 24kHz Web Audio
  *   - Text Chat   : Cloud REST (/voice/chat, /api/voice/chat) with multi-tier client fallback
  *
@@ -21,6 +22,46 @@ function getLiveWsUrl() {
 }
 
 /**
+ * Encode Float32Array PCM samples into standard 16-bit PCM WAV base64
+ */
+function float32ToWavBase64(samples, sampleRate = 16000) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  const writeStr = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
  * Intelligent Client-Side Telemetry and Safety Engine
  * Generates immediate, localized responses if backend endpoints are unavailable.
  */
@@ -33,7 +74,7 @@ export function generateClientTelemetryReply({ message = '', language = 'en', us
   const wind = activeCyclone?.windSpeed != null ? `${activeCyclone.windSpeed} km/h` : '120 km/h';
   const pressure = activeCyclone?.centralPressure != null ? `${activeCyclone.centralPressure} hPa` : '982 hPa';
 
-  const lower = message.toLowerCase();
+  const lower = (message || '').toLowerCase();
 
   // Safety / distance questions
   if (
@@ -141,8 +182,10 @@ export function useGeminiLive({
 
   const wsRef = useRef(null);
   const audioCtxRef = useRef(null);
+  const micAudioCtxRef = useRef(null);
   const micStreamRef = useRef(null);
   const micProcessorRef = useRef(null);
+  const recordedChunksRef = useRef([]);
   const playbackQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
   const sessionReadyRef = useRef(false);
@@ -160,7 +203,6 @@ export function useGeminiLive({
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      // Remove markdown chars for speech
       const clean = (text || '')
         .replace(/[*#_~`]/g, '')
         .replace(/https?:\/\/\S+/g, '')
@@ -179,7 +221,6 @@ export function useGeminiLive({
         utterance.lang = 'en-US';
       }
 
-      // Match voices if available
       const voices = window.speechSynthesis.getVoices?.() || [];
       const targetLang = lang === 'bn' ? 'bn' : lang === 'hi' ? 'hi' : 'en';
       const matched = voices.find((v) => v.lang.toLowerCase().startsWith(targetLang));
@@ -304,7 +345,6 @@ export function useGeminiLive({
       window.location.hostname === '127.0.0.1'
     );
 
-    // On Vercel / production CDN, WebSockets are not hosted, so use standard Web Speech + REST gateway smoothly
     if (!isLocal) {
       sessionReadyRef.current = true;
       setIsConnecting(false);
@@ -340,7 +380,6 @@ export function useGeminiLive({
       try {
         ws = await tryWsConnect(fallbackUrl);
       } catch {
-        // Dev server websocket not started; REST is ready
         sessionReadyRef.current = true;
         setIsConnecting(false);
         return;
@@ -414,7 +453,6 @@ export function useGeminiLive({
       history: transcript.slice(-6).map((m) => ({ role: m.role, text: m.text })),
     };
 
-    // Try endpoints in order: /api/voice/chat, /voice/chat
     const candidateEndpoints = ['/api/voice/chat', '/voice/chat'];
     for (const ep of candidateEndpoints) {
       try {
@@ -431,9 +469,7 @@ export function useGeminiLive({
             break;
           }
         }
-      } catch {
-        // continue to next endpoint
-      }
+      } catch {}
     }
 
     // Direct Gemini client call if VITE_GEMINI_API_KEY is available and cloud endpoint didn't reply
@@ -470,7 +506,6 @@ export function useGeminiLive({
 
     addMessage('assistant', assistantReply, lang);
 
-    // Speak reply if requested (voice interaction or explicit speak option)
     if (options.speak) {
       speakText(assistantReply, lang);
     }
@@ -478,34 +513,168 @@ export function useGeminiLive({
     setIsThinking(false);
   }, [addMessage, stopAudio, transcript, toolHandlers, userLocation, activeCyclone, speakText]);
 
-  // ── Mic Input ─────────────────────────────────────────────────────────────
+  // ── Send Audio Voice Turn (Multimodal audio) ──────────────────────────────
+  const sendAudioTurn = useCallback(async (audioBase64, lang = 'en', options = {}) => {
+    if (!audioBase64) return;
+    stopAudio();
+    setIsThinking(true);
+    setError(null);
+
+    const tempId = Date.now() + Math.random();
+    setTranscript((prev) => [
+      ...prev,
+      { id: tempId, role: 'user', text: '🎤 Listening…', lang, ts: new Date() },
+    ]);
+
+    const payload = {
+      audio: audioBase64,
+      language: lang,
+      userLocation: userLocation ? {
+        city: userLocation.city,
+        state: userLocation.state,
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        distanceKm: userLocation.distanceKm,
+        bearingFromUser: userLocation.bearingFromUser,
+        riskLevel: userLocation.riskLevel,
+        advisory: userLocation.advisory,
+        activeCycloneName: activeCyclone?.name,
+      } : null,
+      history: transcript.slice(-6).map((m) => ({ role: m.role, text: m.text })),
+    };
+
+    let userTranscriptText = '🎤 Voice Query';
+    let assistantReply = '';
+
+    const candidateEndpoints = ['/api/voice/chat', '/voice/chat'];
+    for (const ep of candidateEndpoints) {
+      try {
+        const res = await fetch(ep, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data) {
+            if (data.userText) userTranscriptText = data.userText;
+            if (data.reply) assistantReply = data.reply;
+            break;
+          }
+        }
+      } catch {}
+    }
+
+    if (!assistantReply) {
+      assistantReply = generateClientTelemetryReply({
+        message: 'voice query status',
+        language: lang,
+        userLocation,
+        activeCyclone,
+      });
+    }
+
+    // Replace temporary user message with recognized transcription
+    setTranscript((prev) =>
+      prev.map((m) => (m.id === tempId ? { ...m, text: `🎤 ${userTranscriptText}` } : m))
+    );
+
+    // Add assistant response
+    addMessage('assistant', assistantReply, lang);
+
+    if (options.speak !== false) {
+      speakText(assistantReply, lang);
+    }
+
+    setIsThinking(false);
+  }, [addMessage, stopAudio, transcript, userLocation, activeCyclone, speakText]);
+
+  // ── Microphone Audio Recording ────────────────────────────────────────────
   const startMic = useCallback(async () => {
     if (isListening) return;
     stopAudio();
+    recordedChunksRef.current = [];
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1 },
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
       micStreamRef.current = stream;
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      micAudioCtxRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+      processor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0);
+        recordedChunksRef.current.push(new Float32Array(inputData));
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+      micProcessorRef.current = { source, processor };
+
       setIsListening(true);
     } catch (e) {
-      console.warn('Microphone access note:', e.message);
+      console.warn('Microphone start error:', e.message);
+      setError('Microphone permission required for voice.');
+      setIsListening(false);
     }
   }, [isListening, stopAudio]);
 
-  const stopMic = useCallback(() => {
-    if (!isListening) return;
-    const p = micProcessorRef.current;
-    if (p) {
-      p.source?.disconnect();
-      p.processor?.disconnect();
-      p.ctx?.close().catch(() => {});
+  const stopMic = useCallback(async () => {
+    if (!isListening && !micStreamRef.current) return null;
+
+    // Disconnect audio nodes
+    if (micProcessorRef.current) {
+      try {
+        micProcessorRef.current.source?.disconnect();
+        micProcessorRef.current.processor?.disconnect();
+      } catch {}
       micProcessorRef.current = null;
     }
-    micStreamRef.current?.getTracks().forEach((t) => t.stop());
-    micStreamRef.current = null;
+
+    // Stop tracks
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
+
+    // Close mic context
+    if (micAudioCtxRef.current) {
+      micAudioCtxRef.current.close().catch(() => {});
+      micAudioCtxRef.current = null;
+    }
+
     setIsListening(false);
+
+    // Concatenate recorded PCM chunks
+    const chunks = recordedChunksRef.current;
+    recordedChunksRef.current = [];
+
+    let totalLength = 0;
+    for (const c of chunks) totalLength += c.length;
+
+    // If recorded more than 0.3s (4800 samples at 16kHz)
+    if (totalLength > 4800) {
+      const combined = new Float32Array(totalLength);
+      let offset = 0;
+      for (const c of chunks) {
+        combined.set(c, offset);
+        offset += c.length;
+      }
+      return float32ToWavBase64(combined, 16000);
+    }
+
+    return null;
   }, [isListening]);
 
   useEffect(() => {
@@ -529,6 +698,7 @@ export function useGeminiLive({
     connect,
     disconnect,
     sendText,
+    sendAudioTurn,
     startMic,
     stopMic,
     speakText,

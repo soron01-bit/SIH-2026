@@ -14,23 +14,23 @@ export const StatCard = ({
 }) => {
   return (
     <div
-      className={`bg-[#0c1220] border border-slate-800 rounded-lg p-4 shadow-sm transition-colors hover:border-slate-700 ${className}`}
+      className={`bg-white dark:bg-[#0c1220] border border-slate-200 dark:border-slate-800 rounded-lg p-4 shadow-xs dark:shadow-sm transition-colors hover:border-slate-300 dark:hover:border-slate-700 ${className}`}
     >
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <span className="text-xs font-medium text-slate-400">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
             {label}
           </span>
           <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-bold font-mono tracking-tight text-white">
+            <span className="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white">
               {value}
             </span>
-            {unit && <span className="text-xs font-mono text-slate-400">{unit}</span>}
+            {unit && <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{unit}</span>}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">
           {Icon && (
-            <div className="p-2 rounded bg-slate-850 text-slate-400 border border-slate-800">
+            <div className="p-2 rounded bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
               <Icon className="w-4 h-4" />
             </div>
           )}
@@ -39,18 +39,18 @@ export const StatCard = ({
       </div>
 
       {(subtext || context || trend) && (
-        <div className="mt-3 pt-2.5 border-t border-slate-800/80 space-y-1">
+        <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 space-y-1">
           {subtext && (
-            <div className="text-xs font-medium text-slate-300 flex items-center justify-between">
+            <div className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center justify-between">
               <span>{subtext}</span>
               {trend && (
                 <span
                   className={`font-mono text-xs ${
                     trend.direction === 'up'
-                      ? 'text-rose-400'
+                      ? 'text-rose-500 dark:text-rose-400'
                       : trend.direction === 'down'
-                      ? 'text-emerald-400'
-                      : 'text-slate-400'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-slate-500 dark:text-slate-400'
                   }`}
                 >
                   {trend.text}
@@ -59,7 +59,7 @@ export const StatCard = ({
             </div>
           )}
           {context && (
-            <p className="text-[11px] text-slate-400 leading-snug">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
               {context}
             </p>
           )}

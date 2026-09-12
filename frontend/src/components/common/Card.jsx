@@ -12,19 +12,19 @@ export const Card = ({
 }) => {
   return (
     <div
-      className={`bg-[#0c1220] border border-slate-800 rounded-lg shadow-sm transition-colors ${className}`}
+      className={`bg-white dark:bg-[#0c1220] border border-slate-200 dark:border-slate-800 rounded-lg shadow-xs dark:shadow-none transition-colors ${className}`}
     >
       {(title || subtitle || Icon || action) && (
-        <div className={`px-4 py-3.5 border-b border-slate-800/80 flex items-center justify-between ${headerClassName}`}>
+        <div className={`px-4 py-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between ${headerClassName}`}>
           <div className="flex items-center gap-2.5">
             {Icon && (
-              <div className="p-1.5 rounded bg-slate-800/80 text-sky-400">
+              <div className="p-1.5 rounded bg-sky-50 dark:bg-slate-800/80 text-sky-600 dark:text-sky-400">
                 <Icon className="w-4 h-4" />
               </div>
             )}
             <div>
-              {title && <h3 className="text-sm font-semibold text-slate-100">{title}</h3>}
-              {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+              {title && <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h3>}
+              {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
             </div>
           </div>
           {action && <div className="flex items-center gap-2">{action}</div>}

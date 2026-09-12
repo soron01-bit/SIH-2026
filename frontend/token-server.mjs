@@ -119,7 +119,14 @@ LOCATION GUIDANCE:
     },
   };
 
-  const modelsToTry = [TEXT_MODEL, 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  const modelsToTry = [
+    TEXT_MODEL,
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
+    'gemini-flash-latest',
+    'gemini-3.7-flash',
+    'gemini-2.5-flash',
+  ];
 
   for (const model of modelsToTry) {
     try {

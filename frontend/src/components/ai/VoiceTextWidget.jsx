@@ -303,25 +303,34 @@ export const VoiceTextWidget = () => {
       {/* Location Status Bar */}
       <div className="px-3.5 py-1.5 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between text-[11px]">
         {location ? (
-          <div className="flex items-center gap-1.5 text-slate-300 truncate">
-            <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
-            <span className="font-semibold text-white">{location.city}</span>
-            {proximity && (
-              <>
-                <span className="text-slate-500">•</span>
-                <span className="text-sky-300 font-mono">{proximity.distanceKm} km to {detectedCyclone?.name || 'Storm'}</span>
-                <span
-                  className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase shrink-0"
-                  style={{
-                    color: proximity.color,
-                    backgroundColor: `${proximity.color}20`,
-                    border: `1px solid ${proximity.color}50`,
-                  }}
-                >
-                  {proximity.riskLevel}
-                </span>
-              </>
-            )}
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-1.5 text-slate-300 truncate">
+              <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
+              <span className="font-semibold text-white truncate max-w-[110px]">{location.city}</span>
+              {proximity && (
+                <>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-sky-300 font-mono text-[10px]">{proximity.distanceKm} km</span>
+                  <span
+                    className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase shrink-0"
+                    style={{
+                      color: proximity.color,
+                      backgroundColor: `${proximity.color}20`,
+                      border: `1px solid ${proximity.color}50`,
+                    }}
+                  >
+                    {proximity.riskLevel}
+                  </span>
+                </>
+              )}
+            </div>
+            <button
+              onClick={requestLocation}
+              className="text-[10px] text-sky-400 hover:text-sky-300 hover:underline font-medium shrink-0 ml-2"
+              title="Calibrate high-accuracy live GPS"
+            >
+              {location.isDefault ? '📍 Calibrate GPS' : '🔄 Refresh GPS'}
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between w-full">
@@ -340,9 +349,26 @@ export const VoiceTextWidget = () => {
 
       {/* Error bar */}
       {live.error && (
-        <div className="px-3 py-2 bg-rose-950/60 border-b border-rose-800/60 flex items-center gap-2 text-xs text-rose-300">
-          <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-          <span>{live.error}</span>
+        <div className="px-3 py-1.5 bg-rose-950/70 border-b border-rose-800/60 flex items-center justify-between gap-2 text-xs text-rose-200">
+          <div className="flex items-center gap-1.5 truncate">
+            <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span className="truncate">{live.error}</span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => live.connect()}
+              className="text-[10px] font-bold text-sky-400 hover:underline px-1 py-0.5"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => live.clearError?.()}
+              className="text-rose-400 hover:text-white p-0.5 rounded transition-colors"
+              title="Dismiss"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
 

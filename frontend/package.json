@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node token-server.mjs",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

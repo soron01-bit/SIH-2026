@@ -197,8 +197,8 @@ export const CycloneDetailsPage = () => {
             <ResponsiveContainer>
               <AreaChart data={historicalData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.7} />
-                <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="Inter, sans-serif" />
-                <YAxis stroke="#0284c7" fontSize={11} fontFamily="JetBrains Mono, monospace" domain={[15, 120]} />
+                <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="IBM Plex Sans, sans-serif" />
+                <YAxis stroke="#0284c7" fontSize={11} fontFamily="IBM Plex Sans, sans-serif" domain={[15, 120]} />
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
@@ -230,8 +230,8 @@ export const CycloneDetailsPage = () => {
             <ResponsiveContainer>
               <LineChart data={historicalData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.7} />
-                <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="Inter, sans-serif" />
-                <YAxis stroke="#d97706" fontSize={11} fontFamily="JetBrains Mono, monospace" domain={[930, 1010]} />
+                <XAxis dataKey="time" stroke="#64748b" fontSize={11} fontFamily="IBM Plex Sans, sans-serif" />
+                <YAxis stroke="#d97706" fontSize={11} fontFamily="IBM Plex Sans, sans-serif" domain={[930, 1010]} />
                 <Tooltip
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {

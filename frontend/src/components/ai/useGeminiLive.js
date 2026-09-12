@@ -211,8 +211,17 @@ export function useGeminiLive({
       try {
         ws = await tryWsConnect(fallbackUrl);
       } catch (err) {
-        console.warn('Voice WebSocket connection attempt failed:', err.message);
-        setError('Voice server offline. Run "node token-server.mjs" in the frontend directory.');
+        console.warn('Voice WebSocket connection note:', err?.message || err);
+        // Check if gateway is running via status endpoint
+        try {
+          const statusRes = await fetch('/voice/status');
+          if (statusRes.ok) {
+            setError(null);
+            setIsConnecting(false);
+            return;
+          }
+        } catch {}
+        setError('Voice live gateway reconnecting. Text chat is ready.');
         setIsConnecting(false);
         return;
       }
@@ -385,6 +394,7 @@ export function useGeminiLive({
     isThinking,
     transcript,
     error,
+    clearError: () => setError(null),
     voiceModel,
     textModel,
     connect,

@@ -63,8 +63,27 @@ function findNearestCity(lat, lon) {
   return { ...nearest, distanceKm: minD };
 }
 
+export const DEFAULT_COASTAL_STATION = {
+  latitude: 20.2961,
+  longitude: 85.8245,
+  accuracy: 50,
+  city: 'Bhubaneswar',
+  state: 'Odisha',
+  label: 'Bhubaneswar Radar Station (Odisha Coast)',
+  timestamp: new Date(),
+  isDefault: true,
+};
+
 export const UserLocationProvider = ({ children }) => {
-  const [location, setLocation] = useState(null);
+  const [location, setLocation] = useState(() => {
+    if (typeof window === 'undefined') return DEFAULT_COASTAL_STATION;
+    try {
+      const saved = localStorage.getItem('cyclonex_user_location');
+      return saved ? JSON.parse(saved) : DEFAULT_COASTAL_STATION;
+    } catch {
+      return DEFAULT_COASTAL_STATION;
+    }
+  });
   const [permissionState, setPermissionState] = useState('prompt'); // 'prompt' | 'granted' | 'denied' | 'loading'
   const [error, setError] = useState(null);
 

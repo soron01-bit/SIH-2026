@@ -84,7 +84,7 @@ export const IntensityChart = ({ cyclone, height = 260 }) => {
               stroke="#64748b"
               fontSize={11}
               tickLine={false}
-              fontFamily="Inter, sans-serif"
+              fontFamily="IBM Plex Sans, sans-serif"
             />
 
             {/* Left Axis: Wind Speed (kt) */}
@@ -94,7 +94,7 @@ export const IntensityChart = ({ cyclone, height = 260 }) => {
               stroke="#0284c7"
               fontSize={11}
               tickLine={false}
-              fontFamily="JetBrains Mono, monospace"
+              fontFamily="IBM Plex Sans, sans-serif"
               label={{ value: 'Wind (kt)', angle: -90, position: 'insideLeft', fill: '#38bdf8', fontSize: 10 }}
             />
 
@@ -106,14 +106,14 @@ export const IntensityChart = ({ cyclone, height = 260 }) => {
               stroke="#d97706"
               fontSize={11}
               tickLine={false}
-              fontFamily="JetBrains Mono, monospace"
+              fontFamily="IBM Plex Sans, sans-serif"
               label={{ value: 'Pressure (hPa)', angle: 90, position: 'insideRight', fill: '#fbbf24', fontSize: 10 }}
             />
 
             <Tooltip content={<CustomTooltip />} />
             
             <Legend
-              wrapperStyle={{ fontSize: '11px', fontFamily: 'Inter, sans-serif', paddingTop: '8px' }}
+              wrapperStyle={{ fontSize: '11px', fontFamily: 'IBM Plex Sans, sans-serif', paddingTop: '8px' }}
             />
 
             {/* Wind Speed Area */}

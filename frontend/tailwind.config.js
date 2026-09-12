@@ -50,9 +50,10 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
-        display: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'sans-serif'],
+        heading: ['"Space Grotesk"', '"IBM Plex Sans"', 'sans-serif'],
+        display: ['"Space Grotesk"', '"IBM Plex Sans"', 'sans-serif'],
+        mono: ['"IBM Plex Sans"', 'ui-monospace', 'monospace'],
       },
     },
   },

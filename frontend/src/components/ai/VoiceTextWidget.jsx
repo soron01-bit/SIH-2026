@@ -35,11 +35,10 @@ const MessageBubble = ({ msg }) => {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-2`}>
       <div
-        className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
-          isUser
+        className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${isUser
             ? 'bg-sky-600 text-white rounded-tr-sm'
             : 'bg-slate-800 text-slate-100 rounded-tl-sm border border-slate-700'
-        }`}
+          }`}
       >
         {msg.text}
         <div className={`text-[10px] mt-0.5 ${isUser ? 'text-sky-200' : 'text-slate-500'}`}>
@@ -67,12 +66,12 @@ export const VoiceTextWidget = () => {
 
   const userLocationContext = location
     ? {
-        ...location,
-        distanceKm: proximity?.distanceKm,
-        bearingFromUser: proximity?.bearingFromUser,
-        riskLevel: proximity?.riskLevel,
-        advisory: proximity?.advisory,
-      }
+      ...location,
+      distanceKm: proximity?.distanceKm,
+      bearingFromUser: proximity?.bearingFromUser,
+      riskLevel: proximity?.riskLevel,
+      advisory: proximity?.advisory,
+    }
     : null;
 
   // Build tool handlers
@@ -95,7 +94,7 @@ export const VoiceTextWidget = () => {
     if (!SpeechRec) return false;
     try {
       if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
+        try { recognitionRef.current.abort(); } catch { }
       }
       const rec = new SpeechRec();
       rec.continuous = true;
@@ -133,7 +132,7 @@ export const VoiceTextWidget = () => {
 
   const stopSpeechRec = useCallback(() => {
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
+      try { recognitionRef.current.stop(); } catch { }
       recognitionRef.current = null;
     }
     setSpeechListening(false);
@@ -153,13 +152,13 @@ export const VoiceTextWidget = () => {
       stopSpeechRec();
       live.stopMic();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
 
   const handleSend = (e) => {
     e?.preventDefault();
     if (!inputText.trim()) return;
-    live.sendText(inputText.trim(), lang);
+    live.sendText(inputText.trim(), lang, { speak: !muted });
     setInputText('');
   };
 
@@ -179,9 +178,10 @@ export const VoiceTextWidget = () => {
       if (inputText.trim()) {
         const textToSend = inputText.trim();
         setInputText('');
-        live.sendText(textToSend, lang);
+        live.sendText(textToSend, lang, { speak: !muted });
       }
     } else {
+      live.stopAudio();
       startSpeechRec();
       live.startMic();
     }
@@ -261,9 +261,8 @@ export const VoiceTextWidget = () => {
               <button
                 key={code}
                 onClick={() => setLang(code)}
-                className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${
-                  lang === code ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
-                }`}
+                className={`px-1.5 py-0.5 text-[10px] font-bold transition-colors ${lang === code ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'
+                  }`}
               >
                 {label}
               </button>
@@ -271,7 +270,11 @@ export const VoiceTextWidget = () => {
           </div>
 
           <button
-            onClick={() => setMuted(!muted)}
+            onClick={() => {
+              const nextMuted = !muted;
+              setMuted(nextMuted);
+              if (nextMuted) live.stopAudio();
+            }}
             className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             title={muted ? 'Unmute audio' : 'Mute audio'}
           >
@@ -396,7 +399,7 @@ export const VoiceTextWidget = () => {
               ].map((s) => (
                 <button
                   key={s}
-                  onClick={() => { live.sendText(s, lang); }}
+                  onClick={() => { live.sendText(s, lang, { speak: !muted }); }}
                   className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
                 >
                   {s}
@@ -433,11 +436,10 @@ export const VoiceTextWidget = () => {
           <button
             type="button"
             onClick={toggleMic}
-            className={`p-2 rounded-lg transition-all ${
-              isCurrentlyListening
+            className={`p-2 rounded-lg transition-all ${isCurrentlyListening
                 ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-110'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
-            }`}
+              }`}
             title={isCurrentlyListening ? 'Stop recording & send' : 'Start voice input'}
             disabled={live.isConnecting}
           >

@@ -1,6 +1,7 @@
 {
   "name": "sih-2026-cyclonex",
   "version": "1.0.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "build": "cd frontend && npm install && npm run build",

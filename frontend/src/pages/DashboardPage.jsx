@@ -31,27 +31,28 @@ import { useAIModel } from '../context/AIModelContext';
 
 // ── Small stat instrument card ──────────────────────────────────────────────
 const InstrumentCard = ({ label, value, unit, subValue, color = '#38bdf8', icon: Icon, alert }) => (
-  <div className="relative bg-[#0c1220] border border-slate-800 rounded-lg p-3 space-y-1 overflow-hidden group hover:border-slate-700 transition-colors">
+  <div className="relative glass-card rounded-lg p-3 space-y-1 overflow-hidden group instrument-card-glow">
     {alert && (
       <div className="absolute top-2 right-2">
         <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
       </div>
     )}
-    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
       {Icon && <Icon className="w-3 h-3" style={{ color }} />}
       {label}
     </div>
     <div className="flex items-baseline gap-1.5">
+      {/* Tier 1 data — numbers rendered on a crisp opaque sub-layer, never blurred */}
       <span className="text-2xl font-bold font-mono" style={{ color }}>
         {value}
       </span>
       {unit && <span className="text-xs text-slate-400 font-normal">{unit}</span>}
     </div>
     {subValue && (
-      <div className="text-[11px] text-slate-400 font-mono">{subValue}</div>
+      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">{subValue}</div>
     )}
-    {/* Subtle bottom accent */}
-    <div className="absolute bottom-0 left-0 right-0 h-0.5 opacity-40" style={{ backgroundColor: color }} />
+    {/* Colored accent bottom bar */}
+    <div className="absolute bottom-0 left-0 right-0 h-0.5 opacity-50" style={{ backgroundColor: color }} />
   </div>
 );
 
@@ -202,8 +203,9 @@ export const DashboardPage = () => {
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
               Cyclone Intelligence Dashboard
             </h1>
-            {sc ? (
-              <Badge severity={sc.riskLevel}>● ACTIVE: {sc.name.toUpperCase()}</Badge>
+        {/* ── ACTIVE CYCLONE BADGE ── */}
+          {sc ? (
+              <Badge severity={sc.riskLevel} pulseDot={true}>● ACTIVE: {sc.name.toUpperCase()}</Badge>
             ) : (
               <Badge variant="safe">● NO ACTIVE CYCLONE</Badge>
             )}
@@ -228,7 +230,7 @@ export const DashboardPage = () => {
 
       {/* ── LAST 5 CYCLONES SELECTOR BAR ── */}
       {cyclones.length > 0 && (
-        <div className="bg-[#0c1220] border border-slate-800 rounded-xl p-3 space-y-2">
+        <div className="glass-surface rounded-xl p-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
               <Layers className="w-3.5 h-3.5 text-sky-400" />
@@ -253,8 +255,8 @@ export const DashboardPage = () => {
                   onClick={() => setSelectedCyclone(c)}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border text-left shrink-0 transition-all ${
                     isSel
-                      ? 'bg-sky-950/70 border-sky-500 shadow-md shadow-sky-500/10 scale-[1.02]'
-                      : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-850 text-slate-400 hover:text-white'
+                      ? 'glass-pill border-sky-500/60 shadow-md shadow-sky-500/10 scale-[1.02]'
+                      : 'glass-surface border-transparent hover:border-white/30 text-slate-400 hover:text-slate-700 dark:hover:text-white'
                   }`}
                 >
                   <span
@@ -388,19 +390,19 @@ export const DashboardPage = () => {
 
       {/* ── PREDICTED TRAJECTORY TIMELINE ── */}
       {sc?.forecastTrack?.length > 0 && (
-        <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-4 space-y-2.5">
+        <div className="glass-surface rounded-lg p-4 space-y-2.5">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-300">Predicted Trajectory Timeline</span>
             <span className="text-slate-500 font-mono text-[11px]">Movement & Intensity Forecast</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-            <div className="p-2.5 rounded bg-slate-900 border border-sky-900/60">
+            <div className="p-2.5 rounded glass-surface border border-sky-500/20">
               <span className="text-[10px] text-sky-400 font-semibold block uppercase">CURRENT</span>
               <div className="font-bold text-white font-mono mt-0.5">{sc.windSpeedKmh} km/h</div>
               <span className="text-[11px] text-slate-400 block">{sc.classificationCode}</span>
             </div>
             {sc.forecastTrack.slice(0, 4).map((fc) => (
-              <div key={fc.id} className="p-2.5 rounded bg-slate-900 border border-slate-800">
+              <div key={fc.id} className="p-2.5 rounded glass-surface">
                 <span className="text-[10px] text-amber-400 font-semibold block">{fc.forecastHour}</span>
                 <div className="font-bold text-white font-mono mt-0.5">{Math.round(fc.windSpeedKnots * 1.852)} km/h</div>
                 <span className="text-[11px] text-slate-400 block">{fc.classification.split(' ')[0]}</span>
@@ -416,7 +418,7 @@ export const DashboardPage = () => {
         {/* Left: Active Cyclone Selector Panel */}
         {displayList.length > 1 && (
           <div className="lg:col-span-2">
-            <div className="bg-[#0c1220] border border-slate-800 rounded-lg overflow-hidden h-full">
+            <div className="glass-card rounded-lg overflow-hidden h-full">
               <div className="px-3 py-2.5 border-b border-slate-800 flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cyclone Systems</div>
@@ -483,21 +485,21 @@ export const DashboardPage = () => {
 
           {/* Rapid Intensification */}
           {sc && (
-            <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-4">
+            <div className="glass-card rounded-lg p-4">
               <RapidIntensificationCard cyclone={sc} />
             </div>
           )}
 
           {/* Eye & Structure Analysis */}
           {sc && (
-            <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-4">
+            <div className="glass-card rounded-lg p-4">
               <EyeStructureCard cyclone={sc} />
             </div>
           )}
 
           {/* XAI Explainability */}
           {sc && (
-            <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-4">
+            <div className="glass-card rounded-lg p-4">
               <XAIExplainabilityCard cyclone={sc} />
             </div>
           )}

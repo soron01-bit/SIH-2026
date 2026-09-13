@@ -359,43 +359,60 @@ export const VoiceTextWidget = () => {
     }
   };
 
-  // ── Collapsed pill ──
+  // ── Collapsed pill (Tier 3 glass-dock) ──
   if (!expanded) {
     return (
       <button
         id="voice-text-ai-widget"
         onClick={() => setExpanded(true)}
         className="fixed bottom-5 right-5 z-[2000] flex items-center gap-2.5 px-4 py-2.5 rounded-full
-                   bg-gradient-to-r from-sky-600 to-violet-600 text-white shadow-lg shadow-sky-500/30
-                   hover:shadow-sky-500/50 hover:scale-105 transition-all duration-200 group"
+                   glass-dock text-slate-800 dark:text-white
+                   hover:scale-105 transition-all duration-200 group"
+        style={{
+          background: 'linear-gradient(135deg, rgba(14,90,180,0.18) 0%, rgba(100,40,200,0.14) 100%)',
+        }}
         aria-label="Open AI Voice and Text Assistant"
       >
         <div className="relative">
-          <Mic className="w-4 h-4" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <Mic className="w-4 h-4 text-sky-500 dark:text-sky-400" />
+          {/* Gemini Live status dot */}
+          <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full border border-white/40 ${
+            isCurrentlyListening ? 'bg-sky-400 animate-pulse'
+            : live.isSpeaking ? 'bg-emerald-400 animate-pulse'
+            : live.isThinking ? 'bg-violet-400 animate-pulse'
+            : live.error ? 'bg-rose-500'
+            : 'bg-emerald-400 animate-pulse'
+          }`} />
         </div>
-        <span className="text-sm font-semibold tracking-wide">Voice + Text AI</span>
-        <div className="flex items-center gap-1 text-[11px] opacity-75">
+        <div className="flex flex-col items-start leading-none gap-0.5">
+          <span className="text-sm font-semibold tracking-wide text-sky-700 dark:text-white">
+            {isCurrentlyListening ? 'Listening…'
+             : live.isSpeaking ? 'Speaking…'
+             : live.isThinking ? 'Thinking…'
+             : live.error ? 'Reconnect'
+             : 'Voice + Text AI'}
+          </span>
+          <span className="text-[9px] font-mono opacity-50 text-slate-600 dark:text-slate-400">Gemini Live · {LANG_LABELS[lang]}</span>
+        </div>
+        <div className="flex items-center gap-0.5 text-[10px] opacity-60 ml-1">
           {Object.keys(LANG_LABELS).map((l) => (
-            <span key={l} className={l === lang ? 'opacity-100 font-bold' : 'opacity-50'}>{LANG_LABELS[l]}</span>
+            <span key={l} className={l === lang ? 'opacity-100 font-bold text-sky-600 dark:text-sky-300' : 'opacity-40 text-slate-500 dark:text-slate-400'}>{LANG_LABELS[l]}</span>
           ))}
         </div>
-        <div className="w-px h-4 bg-white/20" />
-        <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded font-mono">Gemini 3.6 / 3.5 / 3.1</span>
       </button>
     );
   }
 
-  // ── Expanded chat widget ──
+  // ── Expanded chat widget (Tier 3 glass-dock) ──
   return (
     <div
       id="voice-text-ai-widget-expanded"
       className="fixed bottom-5 right-5 z-[2000] w-80 sm:w-96 flex flex-col rounded-2xl
-                 bg-[#0c1220] border border-slate-700/80 shadow-2xl shadow-black/60 overflow-hidden"
+                 glass-dock overflow-hidden"
       style={{ maxHeight: '520px' }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-sky-900/60 to-violet-900/60 border-b border-slate-700/80">
+      <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-sky-600/20 via-blue-900/40 to-violet-600/20 border-b border-white/10 dark:border-slate-700/60">
         <div className="flex items-center gap-2.5">
           <div className="relative">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-500 to-violet-600 flex items-center justify-center shadow">
@@ -405,13 +422,13 @@ export const VoiceTextWidget = () => {
               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-[#0c1220] animate-pulse" />
             )}
           </div>
-          <div>
-            <div className="text-sm font-bold text-white flex items-center gap-1.5">
-              CycloneAI
-              {live.isConnecting && <Loader2 className="w-3 h-3 text-sky-400 animate-spin" />}
-              {live.isThinking && <Loader2 className="w-3 h-3 text-violet-400 animate-spin" />}
-              {live.isSpeaking && !muted && <Volume2 className="w-3 h-3 text-emerald-400" />}
-            </div>
+            <div>
+              <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                Voice + Text AI
+                {live.isConnecting && <Loader2 className="w-3 h-3 text-sky-500 dark:text-sky-400 animate-spin" />}
+                {live.isThinking && <Loader2 className="w-3 h-3 text-violet-500 dark:text-violet-400 animate-spin" />}
+                {live.isSpeaking && !muted && <Volume2 className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />}
+              </div>
             <div className="text-[10px] text-slate-400 flex items-center gap-1">
               {isCurrentlyListening ? (
                 <><span className="text-sky-400 font-medium">● 3.1 Live Listening ({LANG_LABELS[lang]})...</span><Waveform active color="#38bdf8" /></>
@@ -479,28 +496,28 @@ export const VoiceTextWidget = () => {
         </div>
       </div>
 
-      {/* 3 Gemini Models Selection Bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[#080d1a] border-b border-slate-800 text-[10px]">
-        <div className="flex items-center gap-1.5 text-slate-400">
-          <Sparkles className="w-3 h-3 text-sky-400" />
-          <span className="font-semibold text-slate-300">Gemini Model:</span>
+      {/* Gemini Model Selection Bar — secondary/de-emphasized */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-black/5 dark:bg-[#080d1a]/80 border-b border-white/10 dark:border-slate-800 text-[10px]">
+        <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+          <Sparkles className="w-3 h-3 text-sky-500/60 dark:text-sky-400/60" />
+          <span className="font-medium text-slate-500 dark:text-slate-400 text-[9px] uppercase tracking-wider">Model:</span>
         </div>
         <div className="flex items-center gap-1">
           {[
-            { id: 'gemini-3.6-flash', label: '🧠 3.6 Flash' },
-            { id: 'gemini-3.5-flash', label: '⚡ 3.5 Flash' },
-            { id: 'gemini-3.1-flash-lite', label: '🎙️ 3.1 Live' },
+            { id: 'gemini-3.6-flash', label: '3.6 Flash' },
+            { id: 'gemini-3.5-flash', label: '3.5 Flash' },
+            { id: 'gemini-3.1-flash-lite', label: '3.1 Live' },
           ].map((m) => (
             <button
               key={m.id}
               type="button"
               onClick={() => setSelectedModel(m.id)}
-              className={`px-2 py-0.5 rounded font-mono text-[10px] transition-all ${
+              className={`px-2 py-0.5 rounded font-mono text-[9px] transition-all ${
                 selectedModel === m.id
-                  ? 'bg-sky-600/30 text-sky-300 border border-sky-500/50 font-bold shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 border border-transparent hover:bg-slate-800/60'
+                  ? 'bg-sky-600/25 text-sky-400 dark:text-sky-300 border border-sky-500/40 font-bold'
+                  : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border border-transparent hover:bg-slate-200/30 dark:hover:bg-slate-800/60'
               }`}
-              title={`Switch active Gemini model to ${m.label}`}
+              title={`Switch to ${m.label}`}
             >
               {m.label}
             </button>
@@ -509,7 +526,7 @@ export const VoiceTextWidget = () => {
       </div>
 
       {/* Location Status Bar */}
-      <div className="px-3.5 py-1.5 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between text-[11px]">
+      <div className="px-3.5 py-1.5 bg-white/40 dark:bg-slate-900/80 border-b border-white/20 dark:border-slate-800 flex items-center justify-between text-[11px]">
         {location ? (
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-1.5 text-slate-300 truncate">
@@ -581,7 +598,7 @@ export const VoiceTextWidget = () => {
       )}
 
       {/* Transcript */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 min-h-[200px] max-h-[300px]">
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1 min-h-[200px] max-h-[300px] bg-white/20 dark:bg-transparent">
         {live.transcript.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 text-center py-5">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-500/20 to-violet-500/20 border border-sky-500/30 flex items-center justify-center">
@@ -624,7 +641,7 @@ export const VoiceTextWidget = () => {
       </div>
 
       {/* Input row */}
-      <div className="p-3 border-t border-slate-800 bg-[#080c15]">
+      <div className="p-3 border-t border-white/15 dark:border-slate-800 bg-white/25 dark:bg-[#080c15]/80">
         <form onSubmit={handleSend} className="flex items-center gap-2">
           <input
             type="text"

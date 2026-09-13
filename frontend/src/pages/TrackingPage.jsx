@@ -132,7 +132,7 @@ export const TrackingPage = () => {
 
           {currentCyclone ? (
             <>
-              <Badge severity={currentCyclone.riskLevel}>
+              <Badge severity={currentCyclone.riskLevel} pulseDot={true}>
                 ● TRACKING: {currentCyclone.name.toUpperCase()}
               </Badge>
               <button
@@ -153,16 +153,16 @@ export const TrackingPage = () => {
       </div>
 
       {/* ENHANCED MAP TOOLBAR */}
-      <div className="bg-[#0c1220] border border-slate-800 rounded-lg overflow-hidden">
+      <div className="glass-panel rounded-lg overflow-hidden">
         {/* Top bar */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 text-xs border-b border-slate-800/60">
           <div className="flex items-center gap-3 flex-wrap">
-            {/* View mode tabs */}
-            <div className="flex items-center rounded-md overflow-hidden border border-slate-800 bg-slate-900/60">
+            {/* View mode tabs — glass segmented control */}
+            <div className="flex items-center rounded-md overflow-hidden glass-control">
               {['Satellite', 'Dark', 'Light'].map((mode) => (
                 <button
                   key={mode}
-                  className="px-2.5 py-1.5 text-[11px] font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors first:text-white first:bg-slate-800"
+                  className="px-2.5 py-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/30 dark:hover:bg-slate-800 transition-colors first:text-slate-700 dark:first:text-white first:bg-white/40 dark:first:bg-slate-800"
                 >
                   {mode}
                 </button>
@@ -172,11 +172,11 @@ export const TrackingPage = () => {
             {/* Cyclone target selector */}
             {cyclones.length > 1 && (
               <div className="flex items-center gap-2">
-                <span className="text-slate-400">Target:</span>
+                <span className="text-slate-500 dark:text-slate-400 text-xs">Target:</span>
                 <select
                   value={selectedCycloneId}
                   onChange={(e) => setSelectedCycloneId(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 rounded px-2.5 py-1 text-xs text-white focus:outline-none"
+                  className="glass-pill rounded px-2.5 py-1 text-xs text-slate-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-sky-500/50"
                 >
                   {cyclones.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -187,8 +187,8 @@ export const TrackingPage = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-2 text-slate-300">
-              <span className="text-slate-400">Basin:</span>
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+              <span className="text-slate-500 dark:text-slate-400 text-xs">Basin:</span>
               <span className="font-semibold text-sky-400">
                 {currentCyclone ? currentCyclone.basin : 'North Indian Ocean'}
               </span>
@@ -249,7 +249,7 @@ export const TrackingPage = () => {
       />
 
       {/* COMPACT IMD INTENSITY SCALE */}
-      <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-3.5 space-y-2">
+      <div className="glass-surface rounded-lg p-3.5 space-y-2">
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="font-semibold text-slate-200">IMD Tropical Cyclone Intensity Classification Scale</span>
           <span className="text-[11px]">3-Minute Average Sustained Winds</span>
@@ -258,7 +258,7 @@ export const TrackingPage = () => {
           {Object.entries(IMD_CATEGORIES).map(([code, cat]) => (
             <div
               key={code}
-              className="p-2 rounded border border-slate-800 bg-slate-900/60 space-y-0.5"
+              className="p-2 rounded glass-pill space-y-0.5"
             >
               <div className="font-semibold" style={{ color: cat.color }}>
                 {code} • {cat.name}

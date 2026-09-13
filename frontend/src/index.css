@@ -5,6 +5,34 @@
 @layer base {
   :root {
     color-scheme: light;
+    /* ── Dock height token — single source of truth ── */
+    --dock-h: 76px;
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       Z-INDEX SCALE — named layers, lowest to highest
+       Never use a magic number; always reference one of these tokens.
+
+       Context: Leaflet's internal pane stack uses z-indices 200–800:
+         tile-pane: 200 │ overlay-pane: 400 │ shadow-pane: 500
+         marker-pane: 600 │ tooltip-pane: 650 │ popup-pane: 700
+         control-pane: 800
+       All of Leaflet's z-indices are scoped inside the map container.
+       Page-level z-indices (below) stack independently above the map.
+       ═══════════════════════════════════════════════════════════════════════ */
+
+    /* Tier: above Leaflet controls inside the map container */
+    --z-map-overlay:       900;   /* glass-panel, layer legend inside map */
+    --z-floating-control: 950;   /* floating city chips, search bar */
+
+    /* Tier: page-level (above the entire <main> content area) */
+    --z-nav:              50;    /* Tailwind z-50: sticky Navbar */
+    --z-modal:            100;   /* Mobile nav drawer (inside Navbar) */
+
+    /* Tier: always-on-top, must clear everything including Navbar */
+    --z-dock:             2000;  /* Voice + Text AI dock, collapsed + expanded */
+    /* Rationale for z-dock: mobile menu (z-modal=100) is inside Navbar
+       (z-nav=50), so z-dock=2000 guarantees the dock floats above any
+       open mobile menu without requiring it to close first. */
   }
 
   html.dark {
@@ -12,16 +40,24 @@
   }
   
   body {
-    background-color: #f8fafc;
+    /* Light mode: atmospheric gradient — gives glass cards something rich to blur through */
+    background-color: #dbeafe; /* fallback */
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 0%,   rgba(147, 197, 253, 0.50) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 5%,   rgba(196, 181, 253, 0.35) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(125, 211, 252, 0.30) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 60% at 0%  60%,  rgba(165, 180, 252, 0.20) 0%, transparent 50%),
+      linear-gradient(160deg, #e0f0ff 0%, #eef4ff 35%, #f4f0ff 65%, #ede9fe 100%);
+    background-attachment: fixed;
     color: #0f172a;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.3s ease, color 0.2s ease;
   }
 
   html.dark body {
-    background-color: #080c15;
+    background: #080c15;
     color: #e2e8f0;
   }
 }
@@ -310,9 +346,9 @@ html:not(.dark) input::placeholder {
 /* Floating AI Voice Widget in Light Mode */
 html.light #voice-text-ai-widget-expanded,
 html:not(.dark) #voice-text-ai-widget-expanded {
-  background-color: #ffffff !important;
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.4) !important;
+  box-shadow: 0 20px 60px -10px rgba(30, 60, 120, 0.15), 0 8px 20px -5px rgba(0, 0, 0, 0.08) !important;
 }
 
 html.light #voice-text-ai-widget-expanded .bg-\[\#080c15\],
@@ -367,4 +403,331 @@ html:not(.dark) #voice-text-ai-widget-expanded .bg-\[\#080c15\] {
 /* ── XAI feature bar shimmer ── */
 @keyframes bar-grow {
   from { width: 0%; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   DOCK SAFE-AREA PADDING
+   Reserves bottom space equal to dock height + safe-area-inset-bottom + gap.
+   Applied to <main> in App.jsx so ALL pages are protected on every screen.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+.page-dock-safe {
+  padding-bottom: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+/* ── bg-app-light: Tailwind utility alias for the atmospheric gradient ── */
+/* Applied to the root <div> in App.jsx so dark:bg-[#080c15] can override it */
+@layer utilities {
+  .bg-app-light {
+    background-color: #dbeafe;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 0%,   rgba(147, 197, 253, 0.50) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 5%,   rgba(196, 181, 253, 0.35) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(125, 211, 252, 0.30) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 60% at 0%  60%,  rgba(165, 180, 252, 0.20) 0%, transparent 50%),
+      linear-gradient(160deg, #e0f0ff 0%, #eef4ff 35%, #f4f0ff 65%, #ede9fe 100%);
+    background-attachment: fixed;
+  }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   GLASS MATERIAL SYSTEM — THREE-TIER HIERARCHY
+   Tier 1: Opaque, high-contrast data containers — NO glass (classes not needed)
+   Tier 2: .glass-surface / .glass-card / .glass-panel / .glass-pill / .glass-button / .glass-control
+   Tier 3: .glass-dock / .glass-modal  (strongest blur, most transparency)
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+/* ── TIER 2: glass-surface (info tiles, secondary sections) ── */
+.glass-surface {
+  /* Light mode: more transparent so the gradient behind bleeds through */
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.70);
+  box-shadow:
+    0 4px 24px rgba(80, 120, 200, 0.10),
+    0 1px 4px rgba(80, 120, 200, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.glass-surface:hover {
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow:
+    0 6px 28px rgba(80, 120, 200, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+html.dark .glass-surface {
+  background: rgba(12, 18, 32, 0.65);
+  border: 1px solid rgba(56, 100, 160, 0.18);
+  box-shadow: 0 4px 20px rgba(0, 10, 30, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+html.dark .glass-surface:hover {
+  border-color: rgba(56, 189, 248, 0.22);
+  box-shadow: 0 6px 24px rgba(0, 10, 30, 0.35), 0 0 0 1px rgba(56, 189, 248, 0.08);
+}
+
+/* ── TIER 2: glass-card (main data cards — more presence) ── */
+.glass-card {
+  /* Light mode: semi-transparent so gradient blurs through */
+  background: rgba(255, 255, 255, 0.52);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 8px 40px rgba(80, 120, 200, 0.12),
+    0 2px 8px rgba(80, 120, 200, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.70),
+    inset 0 -1px 0 rgba(100, 140, 220, 0.05);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow:
+    0 12px 48px rgba(80, 120, 200, 0.16),
+    0 2px 8px rgba(80, 120, 200, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.80);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+html.dark .glass-card {
+  background: rgba(12, 18, 32, 0.80);
+  border: 1px solid rgba(56, 100, 160, 0.22);
+  box-shadow: 0 8px 32px rgba(0, 10, 30, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+html.dark .glass-card:hover {
+  border-color: rgba(56, 189, 248, 0.28);
+  box-shadow: 0 10px 40px rgba(0, 10, 30, 0.40), 0 0 0 1px rgba(56, 189, 248, 0.10);
+}
+
+/* ── TIER 2: glass-panel (map overlay panels, toolbar chrome above map) ── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  box-shadow: 0 6px 28px rgba(80, 120, 200, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+html.dark .glass-panel {
+  background: rgba(10, 15, 28, 0.78);
+  border: 1px solid rgba(56, 100, 160, 0.20);
+  box-shadow: 0 6px 24px rgba(0, 10, 30, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ── TIER 2: glass-pill (filter chips, city chips, nav pills) ── */
+.glass-pill {
+  background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 2px 10px rgba(80, 120, 200, 0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.glass-pill:hover {
+  background: rgba(255, 255, 255, 0.58);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 16px rgba(80, 120, 200, 0.12), inset 0 1px 0 rgba(255,255,255,0.65);
+}
+
+html.dark .glass-pill {
+  background: rgba(20, 30, 50, 0.62);
+  border: 1px solid rgba(56, 100, 160, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 10, 30, 0.20);
+}
+
+html.dark .glass-pill:hover {
+  background: rgba(25, 38, 64, 0.75);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
+/* ── TIER 2: glass-button (secondary action buttons) ── */
+.glass-button {
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(10px) saturate(145%);
+  -webkit-backdrop-filter: blur(10px) saturate(145%);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 2px 10px rgba(80, 120, 200, 0.08), inset 0 1px 0 rgba(255,255,255,0.5);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.glass-button:hover {
+  background: rgba(255, 255, 255, 0.60);
+  box-shadow: 0 4px 18px rgba(80, 120, 200, 0.13), inset 0 1px 0 rgba(255,255,255,0.65);
+}
+
+html.dark .glass-button {
+  background: rgba(20, 30, 55, 0.58);
+  border: 1px solid rgba(56, 100, 160, 0.22);
+  box-shadow: 0 2px 10px rgba(0, 10, 30, 0.22);
+}
+
+html.dark .glass-button:hover {
+  background: rgba(25, 38, 70, 0.72);
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+/* ── TIER 2: glass-control (segmented controls, tab bars) ── */
+.glass-control {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  box-shadow: 0 2px 12px rgba(80, 120, 200, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+html.dark .glass-control {
+  background: rgba(12, 20, 38, 0.72);
+  border: 1px solid rgba(56, 100, 160, 0.20);
+  box-shadow: 0 2px 12px rgba(0, 10, 30, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ── TIER 3: glass-dock (Voice AI dock — strongest blur, most transparent) ── */
+.glass-dock {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 20px 70px rgba(80, 120, 200, 0.18),
+    0 4px 16px rgba(80, 120, 200, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.80),
+    inset 0 -1px 0 rgba(100, 140, 220, 0.06);
+}
+
+html.dark .glass-dock {
+  background: rgba(8, 14, 30, 0.86);
+  border: 1px solid rgba(56, 100, 180, 0.28);
+  box-shadow:
+    0 16px 60px rgba(0, 5, 20, 0.55),
+    0 4px 16px rgba(0, 5, 20, 0.35),
+    inset 0 1px 0 rgba(56, 189, 248, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+/* ── TIER 3: glass-modal (mobile menus, overlays, drawers) ── */
+.glass-modal {
+  background: rgba(255, 255, 255, 0.70);
+  backdrop-filter: blur(24px) saturate(165%);
+  -webkit-backdrop-filter: blur(24px) saturate(165%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 20px 60px rgba(80, 120, 200, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+html.dark .glass-modal {
+  background: rgba(8, 12, 25, 0.90);
+  border: 1px solid rgba(56, 100, 180, 0.25);
+  box-shadow: 0 20px 60px rgba(0, 5, 20, 0.60), inset 0 1px 0 rgba(56, 189, 248, 0.07);
+}
+
+/* ── Badge glass class (applied to all Badge variants) ── */
+.glass-badge {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Pulsing active dot for danger/active badges ── */
+@keyframes badge-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.55; transform: scale(0.80); }
+}
+
+.badge-dot-pulse {
+  animation: badge-dot-pulse 1.8s ease-in-out infinite;
+}
+
+/* ── Gently pulsing outer ring for "ACTIVE" danger states ── */
+@keyframes ping-soft {
+  0%   { transform: scale(1); opacity: 0.7; }
+  70%  { transform: scale(1.8); opacity: 0; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.animate-ping-soft {
+  animation: ping-soft 2s ease-out infinite;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   REDUCED-MOTION ACCESSIBILITY
+   When the OS requests reduced motion, all purely decorative animations are
+   suppressed or replaced with static equivalents.  State changes themselves
+   (Ready / Listening / Speaking / Thinking / Error) remain fully visible via
+   icon shape and color — only the motion is removed, never the information.
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* ── Dock expand / collapse transition ── */
+  #voice-text-ai-widget-expanded {
+    animation: none !important;
+  }
+
+  /* ── Hover scale-up on collapsed pill and cyclone selector buttons ── */
+  .hover\:scale-105:hover,
+  .hover\:scale-\[1\.02\]:hover {
+    transform: none !important;
+  }
+
+  /* ── Badge pulse-dot inner circle ── */
+  .badge-dot-pulse {
+    animation: none !important;
+    opacity: 1;
+  }
+
+  /* ── Badge ping-soft outer ring — show as faint static ring instead ── */
+  .animate-ping-soft {
+    animation: none !important;
+    transform: scale(1.4);
+    opacity: 0.35;
+  }
+
+  /* ── Waveform bars in AI dock ── */
+  .animate-waveform {
+    animation: none !important;
+    transform: scaleY(0.7);
+    opacity: 0.7;
+  }
+
+  /* ── RI gauge pulse ── */
+  .animate-ri-pulse {
+    animation: none !important;
+    opacity: 1;
+  }
+
+  /* ── Tailwind animate-pulse (used on status dots, live indicators) ──
+     We keep the element visible (opacity 1) but remove the pulsing motion.
+     The color/icon still communicates the state (e.g. green = ready,
+     sky = listening, violet = thinking, rose = error). ── */
+  .animate-pulse {
+    animation: none !important;
+    opacity: 1;
+  }
+
+  /* ── CSS transition durations: shorten to imperceptible but not zero
+     (zero breaks some browser-native focus outline transitions) ── */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* ── Restore the badge-dot-pulse & ping-soft overrides that the
+     wildcard above would otherwise collide with ── */
+  .badge-dot-pulse,
+  .animate-ping-soft,
+  .animate-waveform,
+  .animate-ri-pulse,
+  .animate-pulse,
+  #voice-text-ai-widget-expanded {
+    animation: none !important;
+    transition: none !important;
+  }
 }

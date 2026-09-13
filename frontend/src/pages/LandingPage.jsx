@@ -73,7 +73,7 @@ export const LandingPage = () => {
       </div>
 
       {/* 2. CURRENT STATUS COMPONENT (LEVEL 1 VISUAL FOCUS) */}
-      <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-5 sm:p-6 shadow-sm">
+      <div className="glass-card rounded-lg p-5 sm:p-6">
         <div className="flex items-center justify-between text-xs mb-3 border-b border-slate-800/80 pb-2.5">
           <span className="text-slate-400 font-semibold tracking-wider uppercase text-[11px]">
             Current Cyclone Status
@@ -116,23 +116,23 @@ export const LandingPage = () => {
 
             {/* Core telemetry strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800/80">
-              <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
-                <span className="text-[11px] text-slate-400 block font-medium">Wind Speed</span>
+              <div className="p-2.5 rounded glass-surface">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Wind Speed</span>
                 <span className="text-base font-bold font-mono text-white">{activeCyclone.windSpeedKmh} km/h</span>
                 <span className="text-[11px] text-slate-400 block font-mono">({activeCyclone.windSpeedKnots} kt)</span>
               </div>
-              <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
-                <span className="text-[11px] text-slate-400 block font-medium">Central Pressure</span>
+              <div className="p-2.5 rounded glass-surface">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Central Pressure</span>
                 <span className="text-base font-bold font-mono text-white">{activeCyclone.pressureHpa} hPa</span>
                 <span className="text-[11px] text-slate-400 block">Eye depth</span>
               </div>
-              <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
-                <span className="text-[11px] text-slate-400 block font-medium">Current Location</span>
+              <div className="p-2.5 rounded glass-surface">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Current Location</span>
                 <span className="text-sm font-bold font-mono text-white">{activeCyclone.latitude}°N, {activeCyclone.longitude}°E</span>
                 <span className="text-[11px] text-slate-400 block">Eye centroid</span>
               </div>
-              <div className="p-2.5 rounded bg-slate-900 border border-slate-800">
-                <span className="text-[11px] text-slate-400 block font-medium">Movement</span>
+              <div className="p-2.5 rounded glass-surface">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Movement</span>
                 <span className="text-sm font-bold text-white">{activeCyclone.movementDirection}</span>
                 <span className="text-[11px] text-slate-400 block font-mono">@ {activeCyclone.movementSpeedKmh || 14} km/h</span>
               </div>
@@ -171,7 +171,7 @@ export const LandingPage = () => {
 
       {/* 3. THREE COMPACT INFORMATION METRICS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-3.5 flex items-center justify-between">
+        <div className="glass-surface rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="text-xs text-slate-400 font-medium block">AI Model</span>
             <span className="text-sm font-semibold text-emerald-400">Ready</span>
@@ -179,7 +179,7 @@ export const LandingPage = () => {
           <span className="text-xs text-slate-500 font-mono">Deep Learning Core</span>
         </div>
 
-        <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-3.5 flex items-center justify-between">
+        <div className="glass-surface rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="text-xs text-slate-400 font-medium block">Satellite Data</span>
             <span className="text-sm font-semibold text-white">Updated</span>
@@ -187,7 +187,7 @@ export const LandingPage = () => {
           <span className="text-xs text-slate-500 font-mono">INSAT-3D / 3DR</span>
         </div>
 
-        <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-3.5 flex items-center justify-between">
+        <div className="glass-surface rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="text-xs text-slate-400 font-medium block">Monitoring Area</span>
             <span className="text-sm font-semibold text-white">North Indian Ocean</span>
@@ -204,7 +204,7 @@ export const LandingPage = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Link
             to="/tracking"
-            className="group bg-[#0c1220] border border-slate-800 hover:border-slate-700 hover:bg-slate-850 rounded-lg p-4 transition-colors flex items-start gap-3"
+            className="group glass-surface hover:glass-card rounded-lg p-4 transition-all flex items-start gap-3"
           >
             <div className="p-2 rounded bg-slate-800 text-sky-400 group-hover:text-sky-300 transition-colors shrink-0">
               <Compass className="w-4 h-4" />
@@ -222,7 +222,7 @@ export const LandingPage = () => {
 
           <Link
             to="/dashboard"
-            className="group bg-[#0c1220] border border-slate-800 hover:border-slate-700 hover:bg-slate-850 rounded-lg p-4 transition-colors flex items-start gap-3"
+            className="group glass-surface hover:glass-card rounded-lg p-4 transition-all flex items-start gap-3"
           >
             <div className="p-2 rounded bg-slate-800 text-sky-400 group-hover:text-sky-300 transition-colors shrink-0">
               <FileText className="w-4 h-4" />
@@ -240,7 +240,7 @@ export const LandingPage = () => {
 
           <Link
             to="/alerts"
-            className="group bg-[#0c1220] border border-slate-800 hover:border-slate-700 hover:bg-slate-850 rounded-lg p-4 transition-colors flex items-start gap-3"
+            className="group glass-surface hover:glass-card rounded-lg p-4 transition-all flex items-start gap-3"
           >
             <div className="p-2 rounded bg-slate-800 text-sky-400 group-hover:text-sky-300 transition-colors shrink-0">
               <Bell className="w-4 h-4" />
@@ -258,8 +258,8 @@ export const LandingPage = () => {
         </div>
       </div>
 
-      {/* 5. RECENT MONITORING ACTIVITY (CLEAN & USEFUL PROGRESSIVE DISCLOSURE) */}
-      <div className="bg-[#0c1220] border border-slate-800 rounded-lg p-4 space-y-3">
+      {/* 5. RECENT MONITORING ACTIVITY */}
+      <div className="glass-card rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between text-xs border-b border-slate-800/80 pb-2">
           <span className="font-semibold text-slate-300">
             Recent Monitoring Activity

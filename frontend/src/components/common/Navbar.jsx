@@ -50,7 +50,7 @@ export const Navbar = () => {
   const activeCycloneName = detectedCyclone?.name ?? null;
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 dark:bg-[#0c1220]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 transition-colors shadow-2xs">
+    <header className="sticky top-0 z-50 glass-dock border-b border-white/20 dark:border-slate-800/60 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-15 py-2.5 gap-3">
 
@@ -98,10 +98,13 @@ export const Navbar = () => {
           {/* Center: Active Cyclone Pill */}
           {activeCycloneName && (
             <div className="hidden sm:flex items-center gap-2 shrink-0">
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full glass-pill text-xs">
+                <span className="relative flex items-center justify-center w-2.5 h-2.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-rose-500 animate-ping-soft opacity-60" />
+                  <span className="relative w-2 h-2 rounded-full bg-rose-500" />
+                </span>
                 <span className="text-slate-800 dark:text-white font-semibold">Cyclone {activeCycloneName}</span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 dark:bg-rose-950/60 border border-rose-300 dark:border-rose-700/60 text-rose-600 dark:text-rose-400">
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 glass-badge">
                   ACTIVE
                 </span>
               </div>
@@ -145,7 +148,7 @@ export const Navbar = () => {
           <div className="hidden sm:flex items-center gap-2.5 shrink-0">
 
             {/* Theme Toggle (Light / Dark) */}
-            <div className="flex items-center rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/50 p-0.5 shadow-2xs">
+            <div className="flex items-center rounded-lg overflow-hidden glass-control p-0.5">
               <button
                 onClick={() => setTheme('light')}
                 className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
@@ -173,7 +176,7 @@ export const Navbar = () => {
             </div>
 
             {/* Radar Telemetry Stream Mode */}
-            <div className="flex items-center rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100/90 dark:bg-slate-900/50 p-0.5">
+            <div className="flex items-center rounded-lg overflow-hidden glass-control p-0.5">
               <button
                 onClick={() => setViewMode('live')}
                 className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-md transition-colors ${
@@ -211,7 +214,7 @@ export const Navbar = () => {
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
 
             {/* AI Status */}
-            <div className="flex items-center gap-2 text-xs font-mono px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300">
+            <div className="flex items-center gap-2 text-xs font-mono px-2.5 py-1 rounded-md glass-pill text-slate-700 dark:text-slate-300">
               {showDetecting ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -241,7 +244,7 @@ export const Navbar = () => {
 
       {/* Mobile dropdown menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-800 bg-[#0c1220] px-4 pt-2 pb-4 space-y-1">
+        <div className="md:hidden border-b border-white/20 dark:border-slate-800 glass-modal px-4 pt-2 pb-4 space-y-1">
           {navLinks.map((item) => {
             const Icon = item.icon;
             return (

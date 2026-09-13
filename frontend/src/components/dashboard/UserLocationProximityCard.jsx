@@ -60,9 +60,9 @@ export const UserLocationProximityCard = ({ activeCyclone }) => {
   const riskStyle = proximity ? riskColorMap[proximity.riskLevel] || riskColorMap.SAFE : riskColorMap.SAFE;
 
   return (
-    <div className="bg-[#0c1220] border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+    <div className="glass-card rounded-xl overflow-hidden">
       {/* Top Banner / Location Status Header */}
-      <div className="p-4 border-b border-slate-800/80 bg-gradient-to-r from-slate-900/90 via-[#0e172a] to-slate-900/90 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="p-4 border-b border-white/10 dark:border-slate-800/80 bg-gradient-to-r from-sky-500/8 via-blue-500/5 to-violet-500/8 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
             <MapPin className="w-5 h-5 animate-bounce" />
@@ -101,7 +101,7 @@ export const UserLocationProximityCard = ({ activeCyclone }) => {
 
           <button
             onClick={() => setShowCityPicker(!showCityPicker)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass-button text-slate-700 dark:text-slate-200 text-xs font-medium transition-colors"
           >
             <Building2 className="w-3.5 h-3.5 text-slate-400" />
             <span>Select Coastal City</span>
@@ -112,7 +112,7 @@ export const UserLocationProximityCard = ({ activeCyclone }) => {
 
       {/* Optional City Picker Dropdown / Bar */}
       {showCityPicker && (
-        <div className="p-3 bg-slate-900/90 border-b border-slate-800">
+        <div className="p-3 glass-surface border-b border-white/10 dark:border-slate-800">
           <div className="text-[11px] font-semibold text-slate-400 mb-2">
             Quick-Select Coastal Stations (Bay of Bengal & Arabian Sea):
           </div>
@@ -140,7 +140,7 @@ export const UserLocationProximityCard = ({ activeCyclone }) => {
       {/* Main Location Content Body */}
       <div className="p-4 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
         {/* Left: User Detected Coordinates */}
-        <div className="md:col-span-4 bg-slate-900/50 border border-slate-800/80 rounded-lg p-3.5 space-y-2">
+        <div className="md:col-span-4 glass-surface rounded-lg p-3.5 space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Your Current Station</span>
             <span className="font-mono text-[10px] text-sky-400">
@@ -174,7 +174,7 @@ export const UserLocationProximityCard = ({ activeCyclone }) => {
         </div>
 
         {/* Center: Distance & Bearing to Active Cyclone */}
-        <div className="md:col-span-4 bg-slate-900/50 border border-slate-800/80 rounded-lg p-3.5 space-y-2">
+        <div className="md:col-span-4 glass-surface rounded-lg p-3.5 space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Proximity to {activeCyclone?.name || 'Active Storm'}</span>
             <Navigation className="w-3.5 h-3.5 text-sky-400" />

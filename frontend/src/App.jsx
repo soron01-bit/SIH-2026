@@ -21,12 +21,12 @@ export function App() {
       <AIModelProvider>
         <UserLocationProvider>
           <BrowserRouter>
-            <div className="min-h-screen bg-slate-50 dark:bg-[#080c15] text-slate-800 dark:text-slate-100 flex flex-col selection:bg-sky-500/20 selection:text-sky-600 dark:selection:text-sky-300 transition-colors duration-200">
+            <div className="min-h-screen bg-app-light dark:bg-[#080c15] text-slate-800 dark:text-slate-100 flex flex-col selection:bg-sky-500/20 selection:text-sky-600 dark:selection:text-sky-300 transition-colors duration-200">
               {/* Main Top Navigation */}
               <Navbar />
 
               {/* Dynamic Content View */}
-              <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 pb-8">
+              <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 page-dock-safe">
                 <ErrorBoundary>
                   <Routes>
                     <Route path="/" element={<LandingPage />} />

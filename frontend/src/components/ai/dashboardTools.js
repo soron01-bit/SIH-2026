@@ -9,8 +9,7 @@
  * object containing router navigate + shared state setters injected at mount.
  */
 
-import { MOCK_CYCLONES } from '../../data/mockCyclones';
-
+// Real-time dynamic tools registry for CYCLONEX Live AI Assistant
 export const TOOL_DECLARATIONS = [
   {
     name: 'navigate_to_storm',
@@ -88,7 +87,7 @@ export const TOOL_DECLARATIONS = [
  */
 export function buildToolHandlers(ctx) {
   const { navigate, cyclones = [], setSelectedCycloneById } = ctx;
-  const pool = cyclones.length > 0 ? cyclones : MOCK_CYCLONES;
+  const pool = cyclones;
 
   return {
     async navigate_to_storm({ storm_id }) {
@@ -102,7 +101,8 @@ export function buildToolHandlers(ctx) {
         return `Navigated to ${found.name} (${found.classificationCode}). Peak winds: ${found.windSpeedKnots} kt, Pressure: ${found.pressureHpa} hPa.`;
       }
       navigate?.('/tracking');
-      return `Switched to tracking map. Available cyclones: Dana, Fengal, Remal, Michaung, Asna, Mocha.`;
+      const names = pool.map((c) => c.name).join(', ');
+      return `Switched to tracking map. Available live cyclones: ${names || 'No active cyclones detected from live API'}.`;
     },
 
     async toggle_map_layer({ layer, visible }) {

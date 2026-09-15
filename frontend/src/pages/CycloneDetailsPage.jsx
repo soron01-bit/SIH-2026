@@ -50,11 +50,33 @@ export const CycloneDetailsPage = () => {
     fetchStorm();
   }, [id]);
 
-  if (loading || !cyclone) {
+  if (loading) {
     return (
       <div className="min-h-[55vh] flex flex-col items-center justify-center space-y-3">
         <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs font-mono text-slate-400">Loading cyclone storm dossier...</span>
+        <span className="text-xs font-mono text-slate-400">Loading cyclone storm dossier from real-time API...</span>
+      </div>
+    );
+  }
+
+  if (!cyclone) {
+    return (
+      <div className="min-h-[55vh] flex flex-col items-center justify-center space-y-4 text-center px-4">
+        <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400">
+          <Activity className="w-6 h-6 text-sky-400" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-base font-bold text-white">No Live Cyclone Found</h2>
+          <p className="text-xs text-slate-400 max-w-md">
+            No active tropical cyclone matching ID &ldquo;{id}&rdquo; was retrieved from the real-time API feed.
+          </p>
+        </div>
+        <Link
+          to="/dashboard"
+          className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white transition-colors"
+        >
+          Return to Dashboard
+        </Link>
       </div>
     );
   }

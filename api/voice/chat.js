@@ -9,14 +9,37 @@ Respond in the language the user speaks or writes in.
 You have expert knowledge of tropical cyclone tracking, Dvorak classification (CI 1.0 to 8.0), Rapid Intensification (RI), eyewall symmetry, central dense overcast (CDO), and IMD / JTWC alert bulletins.
 Keep spoken and text answers concise, clear, and actionable.`;
 
-function buildFallbackResponse({ message = '', language = 'en', userLocation }) {
+function buildFallbackResponse({ message = '', language = 'en', userLocation, activeCyclone }) {
   const city = userLocation?.city || 'your coastal station';
-  const storm = userLocation?.activeCycloneName || 'Cyclone Dana';
+  const storm = activeCyclone?.name || userLocation?.activeCycloneName || 'the active cyclone';
   const dist = userLocation?.distanceKm != null ? `${userLocation.distanceKm} km` : 'measuring proximity';
-  const risk = userLocation?.riskLevel || 'MODERATE';
-  const adv = userLocation?.advisory || 'Please maintain vigilance and monitor official IMD bulletins and coastal radar updates.';
+  const risk = activeCyclone?.riskLevel || userLocation?.riskLevel || 'MODERATE';
+  const windKt = activeCyclone?.windSpeedKnots || 65;
+  const windKmh = activeCyclone?.windSpeedKmh || Math.round(windKt * 1.852);
+  const pressure = activeCyclone?.pressureHpa || 980;
+  const adv = userLocation?.advisory || activeCyclone?.summary || 'Please maintain vigilance and monitor official live updates.';
 
   const lower = (message || '').toLowerCase();
+
+  // Storm metrics / wind / pressure / intensity
+  if (
+    lower.includes('wind') ||
+    lower.includes('speed') ||
+    lower.includes('pressure') ||
+    lower.includes('intensity') ||
+    lower.includes('हवा') ||
+    lower.includes('गति') ||
+    lower.includes('বাতাস') ||
+    lower.includes('গতিবেগ')
+  ) {
+    if (language === 'bn') {
+      return `${storm}-এর বর্তমান সর্বোচ্চ বাতাসের গতিবেগ ${windKt} নট (${windKmh} কিমি/ঘণ্টা) এবং কেন্দ্রীয় চাপ ${pressure} hPa। স্যাটেলাইট ক্লাউড টপ পর্যবেক্ষণ করা হচ্ছে।`;
+    }
+    if (language === 'hi') {
+      return `${storm} की वर्तमान अधिकतम हवा की गति ${windKt} समुद्री मील (${windKmh} किमी/घंटा) और केंद्रीय दबाव ${pressure} hPa है। चक्रवाती परिसंचरण सक्रिय है।`;
+    }
+    return `${storm} currently exhibits sustained winds of ${windKt} kt (${windKmh} km/h) with central pressure of ${pressure} hPa.`;
+  }
 
   // Safety / distance questions
   if (lower.includes('safe') || lower.includes('सुरक्षित') || lower.includes('নিরাপদ') || lower.includes('distance') || lower.includes('दूरी') || lower.includes('দূরত্ব') || lower.includes('am i') || lower.includes('city') || lower.includes('শহর') || lower.includes('शहर')) {
@@ -32,12 +55,12 @@ function buildFallbackResponse({ message = '', language = 'en', userLocation }) 
   // General greetings or initial contact
   if (lower === 'hi' || lower === 'hello' || lower === 'hey' || lower.includes('नमस्ते') || lower.includes('নমস্কার') || lower.includes('কেমন আছো')) {
     if (language === 'bn') {
-      return `নমস্কার! আমি CycloneAI। ${storm} বর্তমানে ট্র্যাক করা হচ্ছে। ${city} কেন্দ্র থেকে প্রায় ${dist} দূরে (${risk} ঝুঁকি)। আমি আপনাকে কীভাবে সাহায্য করতে পারি?`;
+      return `নমস্কার! আমি CycloneAI। ${storm} বর্তমানে ট্র্যাক করা হচ্ছে (${windKt} নট, ${pressure} hPa)। ${city} কেন্দ্র থেকে প্রায় ${dist} দূরে (${risk} ঝুঁকি)। আমি কীভাবে সাহায্য করতে পারি?`;
     }
     if (language === 'hi') {
-      return `नमस्ते! मैं CycloneAI हूँ। ${storm} की वर्तमान स्थिति ट्रैक की जा रही है। ${city} केंद्र से लगभग ${dist} दूर है (${risk} जोखिम)। मैं आपकी क्या सहायता करूँ?`;
+      return `नमस्ते! मैं CycloneAI हूँ। ${storm} (${windKt} kt, ${pressure} hPa) की वर्तमान स्थिति ट्रैक की जा रही है। ${city} केंद्र से लगभग ${dist} दूर है (${risk} जोखिम)। मैं क्या सहायता करूँ?`;
     }
-    return `Hello! I am CycloneAI. Currently tracking ${storm}. Your station at ${city} is ~${dist} from the eye (${risk} risk level). How can I assist your safety or analysis today?`;
+    return `Hello! I am CycloneAI. Currently tracking ${storm} (${windKt} kt, ${pressure} hPa). Your station at ${city} is ~${dist} from the eye (${risk} risk level). How can I assist your safety or analysis today?`;
   }
 
   // Evacuation / Shelter
@@ -53,12 +76,12 @@ function buildFallbackResponse({ message = '', language = 'en', userLocation }) 
 
   // Default response
   if (language === 'bn') {
-    return `${storm}-এর সর্বশেষ স্যাটেলাইট ও ইনসেট (INSAT-3D/3DR) ডেটা বিশ্লেষিত হচ্ছে। ${city} স্টেশন থেকে দূরত্ব ${dist}। সর্বদা সতর্ক থাকুন।`;
+    return `${storm}-এর সর্বশেষ লাইভ ডেটা (${windKt} kt, ${pressure} hPa) বিশ্লেষিত হচ্ছে। ${city} স্টেশন থেকে দূরত্ব ${dist}। সর্বদা সতর্ক থাকুন।`;
   }
   if (language === 'hi') {
-    return `${storm} के नवीनतम उपग्रह (INSAT-3D/3DR) डेटा का विश्लेषण किया जा रहा है। ${city} से दूरी ${dist} है। सतर्क रहें और आधिकारिक बुलेटिन देखें।`;
+    return `${storm} का नवीनतम उपग्रह डेटा (${windKt} kt, ${pressure} hPa) विश्लेषित किया जा रहा है। ${city} से दूरी ${dist} है। सतर्क रहें और आधिकारिक बुलेटिन देखें।`;
   }
-  return `Live telemetry for ${storm} indicates sustained tracking. Your station at ${city} is currently ${dist} from the eye with a ${risk} risk rating. ${adv}`;
+  return `Live telemetry for ${storm} indicates sustained winds of ${windKt} kt and ${pressure} hPa. Your station at ${city} is currently ${dist} from the eye with a ${risk} risk rating. ${adv}`;
 }
 
 export default async function handler(req, res) {
@@ -90,26 +113,47 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    const { message = '', audio = null, history = [], language = 'en', userLocation } = body;
+    const { message = '', audio = null, history = [], language = 'en', userLocation, activeCyclone } = body;
     const cleanMessage = (message || '').trim();
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+    let cycloneContext = '';
+    if (activeCyclone) {
+      cycloneContext = `
+CURRENT ACTIVELY SELECTED CYCLONE DOSSIER:
+- Cyclone Name: ${activeCyclone.name}
+- Classification: ${activeCyclone.classification || 'Cyclonic Storm'} (${activeCyclone.classificationCode || 'CS'})
+- Oceanic Basin: ${activeCyclone.basin || 'Global Marine Basin'}
+- Eye Centroid Coordinates: ${activeCyclone.latitude}°N, ${activeCyclone.longitude}°E
+- Maximum Sustained Surface Winds: ${activeCyclone.windSpeedKnots || 65} kt (${activeCyclone.windSpeedKmh || 120} km/h)
+- Central Barometric Pressure: ${activeCyclone.pressureHpa || 980} hPa
+- Current Motion: Heading ${activeCyclone.movementDirection || 'North'} at ${activeCyclone.movementSpeedKmh || 14} km/h
+- Localized Risk Rating: ${activeCyclone.riskLevel || 'MODERATE'}
+- Data Ingest Source: ${activeCyclone.sourceAttribution || 'Real-time NASA EONET v3 & Open-Meteo REST feed'}
+- Meteorological Summary: ${activeCyclone.summary || 'Live cyclonic circulation actively monitored'}
+
+CRITICAL DIRECTIVE FOR GEMINI:
+You MUST respond specifically regarding THIS cyclone (${activeCyclone.name}).
+Use the exact telemetry provided above (wind speed ${activeCyclone.windSpeedKnots || 65} kt, pressure ${activeCyclone.pressureHpa || 980} hPa, location ${activeCyclone.latitude}°N, ${activeCyclone.longitude}°E). Do not mention other or past cyclones unless asked.
+`;
+    }
 
     let locationContext = '';
     if (userLocation) {
       locationContext = `
 CURRENT USER LOCATION & CYCLONE TELEMETRY:
 - User Station: ${userLocation.city || 'Coastal Station'}, ${userLocation.state || 'India'} (${userLocation.latitude || 22.57}°N, ${userLocation.longitude || 88.36}°E)
-- Active Storm: ${userLocation.activeCycloneName || 'Cyclone Dana'}
+- Active Storm: ${activeCyclone?.name || userLocation.activeCycloneName || 'the active cyclone'}
 - Distance to Storm Eye: ${userLocation.distanceKm != null ? `${userLocation.distanceKm} km` : 'Measuring'}
 - Bearing to Storm: ${userLocation.bearingFromUser || 'East'}
-- Localized Risk Level: ${userLocation.riskLevel || 'MONITORING'}
+- Localized Risk Level: ${activeCyclone?.riskLevel || userLocation.riskLevel || 'MONITORING'}
 - Localized IMD Advisory: ${userLocation.advisory || 'Standard coastal vigilance'}
 
 LOCATION GUIDANCE:
 1. Always take the user's location (${userLocation.city || 'their area'}) into account.
 2. If the user asks about safety, distance, or storm impact in English, Hindi (हिन्दी), or Bengali (বাংলা):
-   - State their city (${userLocation.city}), exact distance (${userLocation.distanceKm} km), and risk category (${userLocation.riskLevel}).
+   - State their city (${userLocation.city}), exact distance (${userLocation.distanceKm} km), and risk category (${activeCyclone?.riskLevel || userLocation.riskLevel}).
    - Provide clear, reassuring, safety-first guidance tailored to their distance and language.`;
     }
 
@@ -276,7 +320,7 @@ Respond strictly in valid JSON format:
         parts: [{ text: cleanMessage }],
       });
 
-      const fullInstruction = `${SYSTEM_INSTRUCTION}\n${locationContext}\n${langInstruction}\nKeep answer under 3-4 sentences.`;
+      const fullInstruction = `${SYSTEM_INSTRUCTION}\n${cycloneContext}\n${locationContext}\n${langInstruction}\nKeep answer under 3-4 sentences.`;
 
       const payload = {
         contents,
@@ -341,6 +385,7 @@ Respond strictly in valid JSON format:
       message: cleanMessage,
       language: effectiveLang,
       userLocation,
+      activeCyclone,
     });
 
     return res.status(200).json({

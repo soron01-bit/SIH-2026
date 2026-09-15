@@ -1,5 +1,5 @@
 import api from './api';
-import { MOCK_CYCLONES } from '../data/mockCyclones';
+import nasaEonetService from './nasaEonetService';
 
 const STORAGE_KEY = 'cyclonex_active_cyclones';
 
@@ -185,25 +185,48 @@ export const cycloneService = {
         return { data: res.data, isMock: false };
       }
     } catch (err) {
-      // Backend not yet running; fall back to client session / mock
+      // Backend not yet running; fall back to live feeds & archives
     }
 
-    // Check localStorage for any actively analyzed storm and merge with all archived cyclones
+    // 1. Fetch live severe storms / tropical cyclones from NASA EONET v3
+    let nasaStorms = [];
+    try {
+      nasaStorms = await nasaEonetService.getActiveSevereStorms();
+    } catch (nasaErr) {
+      console.warn('[cycloneService] NASA EONET query bypassed:', nasaErr?.message);
+    }
+
+    // 2. Check localStorage for any actively analyzed storm
+    let analyzedStorms = [];
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const storedIds = new Set(parsed.map((p) => p.id));
-          const merged = [...parsed, ...MOCK_CYCLONES.filter((m) => !storedIds.has(m.id))];
-          return { data: merged, isMock: true };
+        if (Array.isArray(parsed)) {
+          analyzedStorms = parsed;
         }
       }
     } catch (e) {
       console.warn('Could not read stored cyclones', e);
     }
 
-    return { data: MOCK_CYCLONES, isMock: true };
+    // 3. Keep ONLY live storms fetched directly from the real-time API (plus any actively analyzed storm in session)
+    const seenIds = new Set();
+    const merged = [];
+
+    for (const storm of [...analyzedStorms, ...nasaStorms]) {
+      if (storm && storm.id && !seenIds.has(storm.id)) {
+        seenIds.add(storm.id);
+        merged.push(storm);
+      }
+    }
+
+    return {
+      data: merged,
+      isMock: false,
+      isLiveNASA: nasaStorms.length > 0,
+      nasaCount: nasaStorms.length,
+    };
   },
 
   /**
@@ -215,8 +238,8 @@ export const cycloneService = {
       return { data: res.data, isMock: false };
     } catch (err) {
       const { data } = await this.getAll();
-      const found = data.find((c) => c.id === id) || data[0];
-      return { data: found, isMock: true };
+      const found = data.find((c) => c.id === id) || data[0] || null;
+      return { data: found, isMock: false };
     }
   },
 
@@ -229,15 +252,15 @@ export const cycloneService = {
       return { data: res.data, isMock: false };
     } catch (err) {
       const { data } = await this.getAll();
-      const storm = data.find((c) => c.id === id) || data[0];
-      if (!storm) return { data: null, isMock: true };
+      const storm = data.find((c) => c.id === id) || data[0] || null;
+      if (!storm) return { data: null, isMock: false };
       return {
         data: {
-          historicalTrack: storm.historicalTrack,
-          forecastTrack: storm.forecastTrack,
+          historicalTrack: storm.historicalTrack || [],
+          forecastTrack: storm.forecastTrack || [],
           currentLocation: { latitude: storm.latitude, longitude: storm.longitude },
         },
-        isMock: true,
+        isMock: false,
       };
     }
   },
@@ -247,7 +270,7 @@ export const cycloneService = {
    */
   async getActiveCyclone() {
     const { data } = await this.getAll();
-    const active = data.find((c) => c.status === 'ACTIVE_MONITORING') || data[0];
+    const active = data.find((c) => c.status === 'ACTIVE_MONITORING') || data[0] || null;
     return active;
   },
 

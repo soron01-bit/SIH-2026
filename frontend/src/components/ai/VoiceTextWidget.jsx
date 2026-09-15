@@ -8,6 +8,7 @@ import useGeminiLive from './useGeminiLive';
 import { buildToolHandlers } from './dashboardTools';
 import { useAIModel } from '../../context/AIModelContext';
 import { useUserLocation } from '../../context/UserLocationContext';
+import cycloneService from '../../services/cycloneService';
 
 const LANG_LABELS = { en: 'EN', hi: 'HI', bn: 'BN' };
 
@@ -54,7 +55,38 @@ export const VoiceTextWidget = () => {
   const navigate = useNavigate();
   const { detectedCyclone } = useAIModel();
   const { location, getProximityToStorm, requestLocation } = useUserLocation();
-  const proximity = detectedCyclone ? getProximityToStorm(detectedCyclone) : null;
+
+  // Active cyclone tracking - dynamically syncs AI with the user's selected cyclone
+  const [activeCyclone, setActiveCyclone] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('cyclonex_active_selected_cyclone');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (!activeCyclone) {
+      cycloneService.getActiveCyclone().then((c) => {
+        if (c) setActiveCyclone(c);
+      });
+    }
+
+    const handleSelected = (e) => {
+      if (e.detail) setActiveCyclone(e.detail);
+    };
+
+    window.addEventListener('cyclonex:selected-cyclone-changed', handleSelected);
+    window.addEventListener('cyclonex:cyclone-updated', handleSelected);
+    return () => {
+      window.removeEventListener('cyclonex:selected-cyclone-changed', handleSelected);
+      window.removeEventListener('cyclonex:cyclone-updated', handleSelected);
+    };
+  }, [activeCyclone]);
+
+  const focusedStorm = activeCyclone || detectedCyclone;
+  const proximity = focusedStorm ? getProximityToStorm(focusedStorm) : null;
 
   const [expanded, setExpanded] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -82,21 +114,21 @@ export const VoiceTextWidget = () => {
       bearingFromUser: proximity?.bearingFromUser,
       riskLevel: proximity?.riskLevel,
       advisory: proximity?.advisory,
+      activeCycloneName: focusedStorm?.name,
     }
     : null;
 
-  // Build tool handlers
-  const cyclones = detectedCyclone ? [detectedCyclone] : [];
+  // Build tool handlers targeting the focused storm
+  const cyclones = focusedStorm ? [focusedStorm] : [];
   const toolHandlers = useCallback(
     () => buildToolHandlers({ navigate, cyclones, location, getProximityToStorm }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [navigate, detectedCyclone, location]
+    [navigate, focusedStorm, location, getProximityToStorm]
   );
 
   const live = useGeminiLive({
     toolHandlers: toolHandlers(),
     userLocation: userLocationContext,
-    activeCyclone: detectedCyclone,
+    activeCyclone: focusedStorm,
   });
 
   const isCurrentlyListening = continuousVoiceActive || live.isListening || speechListening;
@@ -524,6 +556,20 @@ export const VoiceTextWidget = () => {
           ))}
         </div>
       </div>
+
+      {/* Focused Cyclone Telemetry Sync Bar */}
+      {focusedStorm && (
+        <div className="px-3.5 py-1 bg-sky-950/40 border-b border-sky-800/40 flex items-center justify-between text-[10px]">
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            <span className="text-slate-400">AI Focused on:</span>
+            <span className="font-bold text-sky-200 truncate">{focusedStorm.name}</span>
+          </div>
+          <div className="font-mono text-[9px] text-sky-300 shrink-0">
+            {focusedStorm.windSpeedKnots} kt • {focusedStorm.pressureHpa} hPa
+          </div>
+        </div>
+      )}
 
       {/* Location Status Bar */}
       <div className="px-3.5 py-1.5 bg-white/40 dark:bg-slate-900/80 border-b border-white/20 dark:border-slate-800 flex items-center justify-between text-[11px]">

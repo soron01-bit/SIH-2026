@@ -74,6 +74,17 @@ export const TrackingPage = () => {
 
   const currentCyclone = cyclones.find((c) => c.id === selectedCycloneId) || cyclones[0];
 
+  useEffect(() => {
+    if (currentCyclone) {
+      window.dispatchEvent(
+        new CustomEvent('cyclonex:selected-cyclone-changed', { detail: currentCyclone })
+      );
+      try {
+        sessionStorage.setItem('cyclonex_active_selected_cyclone', JSON.stringify(currentCyclone));
+      } catch {}
+    }
+  }, [currentCyclone]);
+
   const handleReset = () => {
     clearCycloneAnalysis();
     setCyclones([]);
@@ -135,6 +146,11 @@ export const TrackingPage = () => {
               <Badge severity={currentCyclone.riskLevel} pulseDot={true}>
                 ● TRACKING: {currentCyclone.name.toUpperCase()}
               </Badge>
+              {currentCyclone.isLiveNASA && (
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-sky-300 bg-sky-950/80 border border-sky-500/80 px-2.5 py-1 rounded-full animate-pulse">
+                  🛰️ NASA EONET v3 Live
+                </span>
+              )}
               <button
                 onClick={handleReset}
                 className="px-2.5 py-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-300 border border-slate-750 text-xs flex items-center gap-1.5 transition-colors"
@@ -180,7 +196,7 @@ export const TrackingPage = () => {
                 >
                   {cyclones.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.classificationCode})
+                      {c.name} ({c.classificationCode}){c.isLiveNASA ? ' 🛰️ [NASA LIVE]' : ''}
                     </option>
                   ))}
                 </select>

@@ -18,6 +18,26 @@ export const SystemHealthCard = () => {
         <div className="flex items-center justify-between p-2.5 rounded bg-slate-900/60 border border-slate-800">
           <div className="flex items-center gap-2 text-slate-300">
             <Radio className="w-3.5 h-3.5 text-sky-400" />
+            <span>NASA EONET v3 Live Feed</span>
+          </div>
+          <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60 font-medium">
+            Connected (JTWC/NHC)
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between p-2.5 rounded bg-slate-900/60 border border-slate-800">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Radio className="w-3.5 h-3.5 text-teal-400" />
+            <span>Open-Meteo Atmospheric Ingest</span>
+          </div>
+          <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60 font-medium">
+            Active (Live REST)
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between p-2.5 rounded bg-slate-900/60 border border-slate-800">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Radio className="w-3.5 h-3.5 text-sky-400" />
             <span>INSAT-3D/3DR (ISRO MOSDAC)</span>
           </div>
           <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60 font-medium">

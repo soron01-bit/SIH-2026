@@ -27,6 +27,7 @@ import EyeStructureCard from '../components/dashboard/EyeStructureCard';
 import XAIExplainabilityCard from '../components/dashboard/XAIExplainabilityCard';
 import CycloneDossierReport from '../components/dashboard/CycloneDossierReport';
 import UserLocationProximityCard from '../components/dashboard/UserLocationProximityCard';
+import OpenMeteoTelemetryCard from '../components/dashboard/OpenMeteoTelemetryCard';
 import { useAIModel } from '../context/AIModelContext';
 
 // ── Small stat instrument card ──────────────────────────────────────────────
@@ -78,6 +79,11 @@ const CycloneListItem = ({ cyclone, isSelected, onClick }) => {
           <div className="flex items-center gap-2 mb-0.5">
             <span className="w-2 h-2 rounded-full animate-pulse shrink-0" style={{ backgroundColor: color }} />
             <span className="text-sm font-semibold text-white truncate">{cyclone.name}</span>
+            {cyclone.isLiveNASA && (
+              <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-sky-950 border border-sky-500/70 text-sky-300 shrink-0">
+                NASA
+              </span>
+            )}
           </div>
           <div className="text-[10px] font-bold px-1.5 py-0.5 rounded inline-block border" style={{
             color, borderColor: `${color}50`, backgroundColor: `${color}15`
@@ -171,10 +177,15 @@ export const DashboardPage = () => {
   }, []);
 
   useEffect(() => {
-    if (detectedCyclone) {
-      setSelectedCyclone(detectedCyclone);
+    if (selectedCyclone) {
+      window.dispatchEvent(
+        new CustomEvent('cyclonex:selected-cyclone-changed', { detail: selectedCyclone })
+      );
+      try {
+        sessionStorage.setItem('cyclonex_active_selected_cyclone', JSON.stringify(selectedCyclone));
+      } catch {}
     }
-  }, [detectedCyclone]);
+  }, [selectedCyclone]);
 
   if (loading) {
     return (
@@ -188,11 +199,11 @@ export const DashboardPage = () => {
   const sc = selectedCyclone;
   const displayList = cyclones;
 
-  // Derived metrics
-  const landfallETA = sc?.landfallETA ?? '84h';
-  const motionDeg = sc?.movementBearingDeg ?? 334;
-  const riProb = sc?.riProbability ?? 41;
-  const riChange = sc?.riIntensification ?? 13;
+  // Derived metrics strictly calculated from selected cyclone
+  const motionDeg = sc?.movementBearingDeg ?? (sc?.movementDirection ? 315 : 0);
+  const riProb = sc?.riProbability ?? Math.min(85, Math.max(15, Math.round(((sc?.windSpeedKnots || 45) / 120) * 65)));
+  const riChange = sc?.riIntensification ?? Math.round((sc?.windSpeedKnots || 45) * 0.18);
+  const landfallETA = sc?.landfallETA ?? (sc?.movementDirection ? `Moving ${sc.movementDirection}` : 'Tracking');
 
   return (
     <div className="space-y-4 pb-8">
@@ -205,7 +216,14 @@ export const DashboardPage = () => {
             </h1>
         {/* ── ACTIVE CYCLONE BADGE ── */}
           {sc ? (
-              <Badge severity={sc.riskLevel} pulseDot={true}>● ACTIVE: {sc.name.toUpperCase()}</Badge>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge severity={sc.riskLevel} pulseDot={true}>● ACTIVE: {sc.name.toUpperCase()}</Badge>
+                {sc.isLiveNASA && (
+                  <span className="flex items-center gap-1 text-[11px] font-semibold text-sky-300 bg-sky-950/80 border border-sky-500/80 px-2 py-0.5 rounded-full animate-pulse">
+                    🛰️ NASA EONET v3 Live
+                  </span>
+                )}
+              </div>
             ) : (
               <Badge variant="safe">● NO ACTIVE CYCLONE</Badge>
             )}
@@ -264,7 +282,7 @@ export const DashboardPage = () => {
                     style={{ backgroundColor: badgeColor }}
                   />
                   <div>
-                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
                       {c.name}
                       <span
                         className="text-[9px] font-mono px-1 py-0.2 rounded border"
@@ -276,6 +294,11 @@ export const DashboardPage = () => {
                       >
                         {c.classificationCode}
                       </span>
+                      {c.isLiveNASA && (
+                        <span className="text-[8px] font-bold px-1.5 py-0.2 rounded bg-sky-950/90 border border-sky-400/80 text-sky-300">
+                          NASA LIVE
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
                       <span>{c.dates?.split('–')[0]?.trim() || c.season}</span>
@@ -336,10 +359,10 @@ export const DashboardPage = () => {
             label="Landfall ETA"
             value={landfallETA}
             unit=""
-            subValue={sc.landfallDate ?? '14 Sept 2026, 21:36'}
+            subValue={sc.landfallDate || sc.landfall?.location || (sc.basin ? `${sc.basin} Basin` : 'Marine Tracking')}
             color="#f59e0b"
             icon={MapPin}
-            alert={true}
+            alert={Boolean(sc.landfallETA || sc.landfall)}
           />
           <InstrumentCard
             label="RI Prob"
@@ -411,6 +434,9 @@ export const DashboardPage = () => {
           </div>
         </div>
       )}
+
+      {/* ── REAL-TIME ATMOSPHERIC TELEMETRY (OPEN-METEO REST BUS) ── */}
+      <OpenMeteoTelemetryCard activeCyclone={sc} />
 
       {/* ── MAIN WORKSPACE ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">

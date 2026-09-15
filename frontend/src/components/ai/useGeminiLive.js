@@ -67,12 +67,14 @@ function float32ToWavBase64(samples, sampleRate = 16000) {
  */
 export function generateClientTelemetryReply({ message = '', language = 'en', userLocation, activeCyclone }) {
   const city = userLocation?.city || 'your coastal station';
-  const storm = activeCyclone?.name || userLocation?.activeCycloneName || 'Cyclone Dana';
+  const storm = activeCyclone?.name || userLocation?.activeCycloneName || 'the active cyclone';
   const dist = userLocation?.distanceKm != null ? `${userLocation.distanceKm} km` : 'measuring proximity';
-  const risk = userLocation?.riskLevel || 'MODERATE';
-  const adv = userLocation?.advisory || 'Please maintain vigilance and monitor official IMD bulletins and coastal radar updates.';
-  const wind = activeCyclone?.windSpeed != null ? `${activeCyclone.windSpeed} km/h` : '120 km/h';
-  const pressure = activeCyclone?.centralPressure != null ? `${activeCyclone.centralPressure} hPa` : '982 hPa';
+  const risk = activeCyclone?.riskLevel || userLocation?.riskLevel || 'MODERATE';
+  const adv = userLocation?.advisory || activeCyclone?.summary || 'Please maintain vigilance and monitor official live updates.';
+  const windKt = activeCyclone?.windSpeedKnots || (activeCyclone?.windSpeedKmh ? Math.round(activeCyclone.windSpeedKmh / 1.852) : 65);
+  const windKmh = activeCyclone?.windSpeedKmh || (activeCyclone?.windSpeedKnots ? Math.round(activeCyclone.windSpeedKnots * 1.852) : 120);
+  const wind = `${windKmh} km/h (${windKt} kt)`;
+  const pressure = activeCyclone?.pressureHpa != null ? `${activeCyclone.pressureHpa} hPa` : '980 hPa';
 
   const lower = (message || '').toLowerCase();
 
@@ -684,6 +686,22 @@ export function useGeminiLive({
       message: cleanText,
       language: lang,
       model: options.model || textModel,
+      activeCyclone: activeCyclone ? {
+        name: activeCyclone.name,
+        classification: activeCyclone.classification,
+        classificationCode: activeCyclone.classificationCode,
+        latitude: activeCyclone.latitude,
+        longitude: activeCyclone.longitude,
+        windSpeedKnots: activeCyclone.windSpeedKnots,
+        windSpeedKmh: activeCyclone.windSpeedKmh,
+        pressureHpa: activeCyclone.pressureHpa,
+        movementDirection: activeCyclone.movementDirection,
+        movementSpeedKmh: activeCyclone.movementSpeedKmh,
+        basin: activeCyclone.basin,
+        riskLevel: activeCyclone.riskLevel,
+        sourceAttribution: activeCyclone.sourceAttribution,
+        summary: activeCyclone.summary,
+      } : null,
       userLocation: userLocation ? {
         city: userLocation.city,
         state: userLocation.state,
@@ -738,6 +756,21 @@ export function useGeminiLive({
           ? 'CRITICAL REQUIREMENT: The user communicated in HINDI. You MUST formulate your entire response in natural HINDI (हिन्दी script). Do NOT reply in English. Keep answer under 3 sentences.'
           : 'CRITICAL REQUIREMENT: The user communicated in ENGLISH. You MUST formulate your entire response in natural, fluent ENGLISH. Keep answer under 3 sentences.';
 
+        let cyclonePrompt = '';
+        if (activeCyclone) {
+          cyclonePrompt = `\nCURRENT ACTIVELY SELECTED CYCLONE DOSSIER:
+- Cyclone Name: ${activeCyclone.name}
+- Classification: ${activeCyclone.classification} (${activeCyclone.classificationCode})
+- Oceanic Basin: ${activeCyclone.basin || 'Global Marine Basin'}
+- Eye Coordinates: ${activeCyclone.latitude}°N, ${activeCyclone.longitude}°E
+- Peak Sustained Wind Speed: ${activeCyclone.windSpeedKnots} kt (${activeCyclone.windSpeedKmh} km/h)
+- Central Barometric Pressure: ${activeCyclone.pressureHpa} hPa
+- Current Motion: Heading ${activeCyclone.movementDirection} at ${activeCyclone.movementSpeedKmh} km/h
+- Localized Risk Rating: ${activeCyclone.riskLevel}
+- Synoptic Summary: ${activeCyclone.summary}
+CRITICAL INSTRUCTION: Your response MUST be strictly based on this currently active cyclone (${activeCyclone.name}) and its exact metrics above. Do not confuse it with other cyclones.`;
+        }
+
         for (const model of clientModels) {
           try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${clientKey}`;
@@ -747,7 +780,7 @@ export function useGeminiLive({
               body: JSON.stringify({
                 contents: [{
                   role: 'user',
-                  parts: [{ text: `${langPrompt}\nUser question: ${cleanText}` }],
+                  parts: [{ text: `${langPrompt}${cyclonePrompt}\nUser question: ${cleanText}` }],
                 }],
               }),
             });
@@ -762,6 +795,15 @@ export function useGeminiLive({
           } catch { }
         }
       }
+    }
+
+    if (!assistantReply) {
+      assistantReply = generateClientTelemetryReply({
+        message: cleanText,
+        language: effectiveQueryLang,
+        userLocation,
+        activeCyclone,
+      });
     }
 
     // Immediate Local Telemetry & Knowledge Engine fallback

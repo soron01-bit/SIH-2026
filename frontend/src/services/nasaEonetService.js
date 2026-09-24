@@ -125,32 +125,32 @@ export const transformNASAEonetEvent = (event, liveWeather = null) => {
   const windKt = Math.round(liveWindKmh / 1.852);
 
   // Determine IMD / WMO classification
-  let classification = 'Cyclonic Storm (CS)';
+  let classification = 'Cyclonic Storm';
   let classificationCode = 'CS';
   let riskLevel = 'MODERATE';
 
   if (windKt >= 120) {
-    classification = 'Super Cyclonic Storm (SuCS)';
+    classification = 'Super Cyclonic Storm';
     classificationCode = 'SuCS';
     riskLevel = 'EXTREME';
   } else if (windKt >= 90) {
-    classification = 'Extremely Severe Cyclonic Storm (ESCS)';
+    classification = 'Extremely Severe Cyclonic Storm';
     classificationCode = 'ESCS';
     riskLevel = 'CRITICAL';
   } else if (windKt >= 64) {
-    classification = 'Very Severe Cyclonic Storm (VSCS)';
+    classification = 'Very Severe Cyclonic Storm';
     classificationCode = 'VSCS';
     riskLevel = 'HIGH';
   } else if (windKt >= 48) {
-    classification = 'Severe Cyclonic Storm (SCS)';
+    classification = 'Severe Cyclonic Storm';
     classificationCode = 'SCS';
     riskLevel = 'HIGH';
   } else if (windKt >= 34) {
-    classification = 'Cyclonic Storm (CS)';
+    classification = 'Cyclonic Storm';
     classificationCode = 'CS';
     riskLevel = 'MODERATE';
   } else {
-    classification = 'Deep Depression (DD)';
+    classification = 'Deep Depression';
     classificationCode = 'DD';
     riskLevel = 'LOW';
   }
@@ -281,16 +281,24 @@ export const nasaEonetService = {
       const url = `${NASA_EONET_BASE}/events?category=severeStorms&status=open`;
       const res = await axios.get(url, { timeout: 8000 });
       const events = res.data?.events || [];
-
-      if (events.length === 0) {
+      let rawEvents = events;
+      if (rawEvents.length === 0) {
         // If status=open is currently empty, query the most recent severe storms
         const recentUrl = `${NASA_EONET_BASE}/events?category=severeStorms&limit=6`;
         const recentRes = await axios.get(recentUrl, { timeout: 8000 });
-        const recentEvents = recentRes.data?.events || [];
-        return recentEvents.map((e) => transformNASAEonetEvent(e)).filter(Boolean);
+        rawEvents = recentRes.data?.events || [];
       }
 
-      return events.map((e) => transformNASAEonetEvent(e)).filter(Boolean);
+      const parsed = rawEvents.map((e) => transformNASAEonetEvent(e)).filter(Boolean);
+
+      // Prioritize North Indian Ocean storms (Bay of Bengal / Arabian Sea) first
+      parsed.sort((a, b) => {
+        const aNIO = (a.basin === 'Bay of Bengal' || a.basin === 'Arabian Sea') ? 1 : 0;
+        const bNIO = (b.basin === 'Bay of Bengal' || b.basin === 'Arabian Sea') ? 1 : 0;
+        return bNIO - aNIO;
+      });
+
+      return parsed;
     } catch (error) {
       console.warn('[NASA EONET] Failed to fetch active storms:', error?.message);
       return [];

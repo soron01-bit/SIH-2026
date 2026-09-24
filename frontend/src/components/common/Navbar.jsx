@@ -18,17 +18,45 @@ import {
 import { useAIModel } from '../../context/AIModelContext';
 import { useUserLocation } from '../../context/UserLocationContext';
 import { useTheme } from '../../context/ThemeContext';
+import cycloneService from '../../services/cycloneService';
 
 export const Navbar = () => {
   const { theme, setTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [utcTime, setUtcTime] = useState('');
   const [viewMode, setViewMode] = useState('live'); // 'live' | 'replay'
+  const [liveActiveCyclone, setLiveActiveCyclone] = useState(null);
 
   const { isModelConnected, isDetecting, detectedCyclone } = useAIModel();
   const { location, requestLocation, getProximityToStorm } = useUserLocation();
-  const proximity = detectedCyclone ? getProximityToStorm(detectedCyclone) : null;
+  const currentStorm = detectedCyclone || liveActiveCyclone;
+  const proximity = currentStorm ? getProximityToStorm(currentStorm) : null;
   const showDetecting = isModelConnected || isDetecting;
+
+  useEffect(() => {
+    // Sync current active cyclone from real-time service
+    cycloneService.getActiveCyclone().then((storm) => {
+      if (storm) setLiveActiveCyclone(storm);
+    });
+
+    const handleSelected = (e) => {
+      if (e.detail) setLiveActiveCyclone(e.detail);
+    };
+    const handleUpdated = (e) => {
+      if (e.detail) {
+        setLiveActiveCyclone(e.detail);
+      } else {
+        cycloneService.getActiveCyclone().then((s) => setLiveActiveCyclone(s));
+      }
+    };
+
+    window.addEventListener('cyclonex:selected-cyclone-changed', handleSelected);
+    window.addEventListener('cyclonex:cyclone-updated', handleUpdated);
+    return () => {
+      window.removeEventListener('cyclonex:selected-cyclone-changed', handleSelected);
+      window.removeEventListener('cyclonex:cyclone-updated', handleUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     const updateClocks = () => {
@@ -47,7 +75,12 @@ export const Navbar = () => {
     { to: '/alerts', label: 'Alerts', icon: Bell },
   ];
 
-  const activeCycloneName = detectedCyclone?.name ?? null;
+  const activeCycloneName = currentStorm?.name ?? null;
+  const formattedStormName = activeCycloneName
+    ? (/^(cyclone|tropical cyclone|hurricane|typhoon)\b/i.test(activeCycloneName)
+        ? activeCycloneName
+        : `Cyclone ${activeCycloneName}`)
+    : null;
 
   return (
     <header className="sticky top-0 z-50 glass-dock border-b border-white/20 dark:border-slate-800/60 transition-colors">
@@ -103,7 +136,7 @@ export const Navbar = () => {
                   <span className="absolute inline-flex h-full w-full rounded-full bg-rose-500 animate-ping-soft opacity-60" />
                   <span className="relative w-2 h-2 rounded-full bg-rose-500" />
                 </span>
-                <span className="text-slate-800 dark:text-white font-semibold">Cyclone {activeCycloneName}</span>
+                <span className="text-slate-800 dark:text-white font-semibold">{formattedStormName}</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 glass-badge">
                   ACTIVE
                 </span>

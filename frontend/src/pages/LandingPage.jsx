@@ -11,12 +11,13 @@ import {
   CheckCircle2,
   AlertCircle,
   ExternalLink,
+  RotateCcw,
 } from 'lucide-react';
 import cycloneService from '../services/cycloneService';
 import { useAIModel } from '../context/AIModelContext';
 
 export const LandingPage = () => {
-  const { detectedCyclone } = useAIModel();
+  const { detectedCyclone, clearCycloneAnalysis } = useAIModel();
   const [activeCyclone, setActiveCyclone] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState('');
@@ -95,15 +96,43 @@ export const LandingPage = () => {
                     Active Cyclone
                   </span>
                 </div>
-                <h2 className="text-2xl font-bold text-white tracking-tight">
-                  {activeCyclone.name}
-                </h2>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="text-2xl font-bold text-white tracking-tight">
+                    {activeCyclone.name}
+                  </h2>
+                  {activeCyclone.isLiveNASA ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/60 text-sky-300 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                      NASA EONET LIVE
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-950/80 border border-purple-500/60 text-purple-300 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                      AI SATELLITE ANALYSIS
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-slate-300">
-                  {activeCyclone.classification} ({activeCyclone.classificationCode}) • {activeCyclone.basin}
+                  {activeCyclone.classification?.includes(`(${activeCyclone.classificationCode})`)
+                    ? activeCyclone.classification
+                    : `${activeCyclone.classification} (${activeCyclone.classificationCode})`} • {activeCyclone.basin}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {detectedCyclone && (
+                  <button
+                    onClick={() => {
+                      clearCycloneAnalysis();
+                      fetchStatus();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs border border-slate-700 transition-colors"
+                    title="Reset to live satellite radar feed"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset to Live Feed</span>
+                  </button>
+                )}
                 <Link
                   to="/tracking"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs transition-colors"

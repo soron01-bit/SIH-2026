@@ -199,22 +199,17 @@ export const cycloneService = {
     // 2. Check localStorage for any actively analyzed storm
     let analyzedStorms = [];
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
-          analyzedStorms = parsed;
-        }
-      }
+      analyzedStorms = this.getStoredCyclones();
     } catch (e) {
       console.warn('Could not read stored cyclones', e);
     }
 
-    // 3. Keep ONLY live storms fetched directly from the real-time API (plus any actively analyzed storm in session)
+    // 3. Keep ONLY live storms fetched directly from the real-time API (live storms first), plus any actively analyzed storm
     const seenIds = new Set();
     const merged = [];
 
-    for (const storm of [...analyzedStorms, ...nasaStorms]) {
+    // Real-time live NASA storms ALWAYS take top priority
+    for (const storm of [...nasaStorms, ...analyzedStorms]) {
       if (storm && storm.id && !seenIds.has(storm.id)) {
         seenIds.add(storm.id);
         merged.push(storm);
@@ -313,15 +308,17 @@ export const cycloneService = {
       const parsed = JSON.parse(stored);
       if (!Array.isArray(parsed)) return [];
 
-      // Filter out outdated static Remal artifact from earlier debugging sessions
+      // Filter out outdated static Remal & mock test Dana artifacts from earlier testing sessions
       const cleanList = parsed.filter(
         (c) =>
           !(
-            c.name?.includes('Remal') &&
-            Number(c.latitude) >= 16.0 &&
-            Number(c.latitude) <= 18.0 &&
-            Number(c.longitude) >= 85.0 &&
-            Number(c.longitude) <= 87.0
+            (c.name?.includes('Remal') &&
+              Number(c.latitude) >= 16.0 &&
+              Number(c.latitude) <= 18.0 &&
+              Number(c.longitude) >= 85.0 &&
+              Number(c.longitude) <= 87.0) ||
+            (c.name?.includes('Dana') && !c.isLiveNASA) ||
+            (c.id && c.id.includes('dana'))
           )
       );
 

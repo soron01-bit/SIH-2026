@@ -13,7 +13,17 @@ dist-ssr
 *.local
 .env
 .env.*
-.env.local
+.env*.local
+*.env
+*.env.*
+
+# Private Keys, Certificates & Credentials
+*.pem
+*.key
+*.cert
+*.crt
+credentials.json
+token.json
 
 # Editor directories and files
 .vscode/*

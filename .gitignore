@@ -11,9 +11,26 @@ dist-ssr/
 
 # Environment and Secrets
 .env
-.env.local
-.env.*.local
+.env.*
+.env*.local
 *.env
+*.env.*
+**/.env
+**/.env.*
+**/*.env
+**/*.env.*
+
+# Private Keys, Certificates & Credentials
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+credentials.json
+token.json
+client_secret*.json
+service-account*.json
 
 # Python / Virtual Environment (Backend)
 __pycache__/
